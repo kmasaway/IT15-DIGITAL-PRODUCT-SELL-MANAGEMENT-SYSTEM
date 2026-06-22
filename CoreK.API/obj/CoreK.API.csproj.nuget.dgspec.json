@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\Keanu\\CoreK\\CoreK.API\\CoreK.API.csproj": {}
+    "C:\\Users\\Keanu\\IT15-DIGITAL-PRODUCT-SELL-MANAGEMENT-SYSTEM\\CoreK.API\\CoreK.API.csproj": {}
   },
   "projects": {
-    "C:\\Users\\Keanu\\CoreK\\CoreK.API\\CoreK.API.csproj": {
+    "C:\\Users\\Keanu\\IT15-DIGITAL-PRODUCT-SELL-MANAGEMENT-SYSTEM\\CoreK.API\\CoreK.API.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Keanu\\CoreK\\CoreK.API\\CoreK.API.csproj",
+        "projectUniqueName": "C:\\Users\\Keanu\\IT15-DIGITAL-PRODUCT-SELL-MANAGEMENT-SYSTEM\\CoreK.API\\CoreK.API.csproj",
         "projectName": "CoreK.API",
-        "projectPath": "C:\\Users\\Keanu\\CoreK\\CoreK.API\\CoreK.API.csproj",
+        "projectPath": "C:\\Users\\Keanu\\IT15-DIGITAL-PRODUCT-SELL-MANAGEMENT-SYSTEM\\CoreK.API\\CoreK.API.csproj",
         "packagesPath": "C:\\Users\\Keanu\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Keanu\\CoreK\\CoreK.API\\obj\\",
+        "outputPath": "C:\\Users\\Keanu\\IT15-DIGITAL-PRODUCT-SELL-MANAGEMENT-SYSTEM\\CoreK.API\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

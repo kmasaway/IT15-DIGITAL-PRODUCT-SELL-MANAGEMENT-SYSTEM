@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "7F6zrqHHfc8=",
+  "dgSpecHash": "jWUUhyAj0y0=",
   "success": true,
-  "projectFilePath": "C:\\Users\\Keanu\\CoreK\\CoreK.API\\CoreK.API.csproj",
+  "projectFilePath": "C:\\Users\\Keanu\\IT15-DIGITAL-PRODUCT-SELL-MANAGEMENT-SYSTEM\\CoreK.API\\CoreK.API.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\Keanu\\.nuget\\packages\\azure.core\\1.38.0\\azure.core.1.38.0.nupkg.sha512",
     "C:\\Users\\Keanu\\.nuget\\packages\\azure.identity\\1.11.4\\azure.identity.1.11.4.nupkg.sha512",
