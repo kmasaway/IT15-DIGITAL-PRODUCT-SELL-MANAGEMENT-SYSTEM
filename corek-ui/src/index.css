@@ -1,0 +1,80 @@
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100vh;
+  box-sizing: border-box;
+  background-color: #f0f7f4;
+}
+
+#root {
+  max-width: none !important;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+}
+
+*, *:before, *:after {
+  box-sizing: inherit;
+}
+
+main {
+  width: 100%;
+  max-width: 1440px !important;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+input::placeholder {
+  color: #7ea191;
+  opacity: 0.8;
+}
+
+input:focus {
+  background-color: #ffffff !important;
+  border-color: #00bfa5 !important;
+  box-shadow: 0 0 0 4px rgba(0, 191, 165, 0.12) !important;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; backdrop-filter: blur(0px); }
+  to { opacity: 1; backdrop-filter: blur(6px); }
+}
+
+@keyframes modalScaleUp {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.animate-overlay {
+  animation: fadeIn 0.2s ease-out forwards;
+}
+
+.animate-modal {
+  animation: modalScaleUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes ambientGlow {
+  0% { transform: translate(0px, 0px) scale(1); }
+  50% { transform: translate(20px, -20px) scale(1.1); filter: opacity(0.7); }
+  100% { transform: translate(0px, 0px) scale(1); }
+}
+
+.animate-glow {
+  animation: ambientGlow 8s ease-in-out infinite;
+}

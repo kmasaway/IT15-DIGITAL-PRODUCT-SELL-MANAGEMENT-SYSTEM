@@ -1,0 +1,6 @@
+@CoreK.API_HostAddress = http://localhost:5132
+
+GET {{CoreK.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
