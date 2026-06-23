@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { X, LogIn, UserPlus, Loader2, AlertCircle } from 'lucide-react';
 
 export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
   const [isRegisterMode, setIsRegisterMode] = useState(false);
-  const [fields, setFields] = useState({ firstName: '', lastName: '', email: '', password: '' });
+  const [fields, setFields] = useState({ firstName: '', lastName: '', email: '', password: '', role: 'Customer' });
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -27,8 +27,8 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
           email: fields.email, 
           Password: fields.password,
           password: fields.password,
-          Role: "Customer",
-          role: "Customer"
+          Role: fields.role,
+          role: fields.role
         }
       : { 
           Email: fields.email,
@@ -52,10 +52,10 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
       let data = {};
       try {
         data = responseText ? JSON.parse(responseText) : {};
-      } catch (pErr) {
+      } catch (parseError) {
         // Safe string fallback capture if backend sends a raw message instead of JSON object
         if (!response.ok) {
-          throw new Error(responseText || `HTTP status code thrown: ${response.status}`);
+          throw new Error(responseText || `HTTP status code thrown: ${response.status}`, { cause: parseError });
         }
       }
 
@@ -66,10 +66,9 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
       }
 
       if (isRegisterMode) {
-        // Instead of switching directly to login blindly, notify them about the Gmail verification loop
-        setErrorMessage(data.message || 'Registration successful! Check your Gmail inbox to activate your account.');
+        setErrorMessage(data.message || 'Registration successful! Your account is ready. You can now sign in.');
         // Reset local credential input values safely
-        setFields({ firstName: '', lastName: '', email: '', password: '' });
+        setFields({ firstName: '', lastName: '', email: '', password: '', role: 'Customer' });
         setIsRegisterMode(false);
       } else {
         if (data.token) {
@@ -78,7 +77,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
         }
         
         if (typeof onAuthSuccess === 'function') {
-          onAuthSuccess();
+          onAuthSuccess(data.user);
         }
         onClose();
       }
@@ -96,7 +95,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
         
         <div style={styles.header}>
           <h3 style={styles.title}>
-            {isRegisterMode ? 'Create System Account' : 'Authenticate Identity'}
+            {isRegisterMode ? 'Create Account' : 'Login to CoreK'}
           </h3>
           <button style={styles.closeBtn} onClick={onClose} disabled={isLoading}>
             <X size={18} />
@@ -119,32 +118,48 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
 
         <form onSubmit={handleSubmit} style={styles.form}>
           {isRegisterMode && (
-            <div style={styles.row}>
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>First Name</label>
-                <input
-                  type="text"
-                  required
-                  disabled={isLoading}
-                  placeholder="John"
-                  style={styles.input}
-                  value={fields.firstName}
-                  onChange={(e) => setFields({ ...fields, firstName: e.target.value })}
-                />
+            <>
+              <div style={styles.row}>
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>First Name</label>
+                  <input
+                    type="text"
+                    required
+                    disabled={isLoading}
+                    placeholder="John"
+                    style={styles.input}
+                    value={fields.firstName}
+                    onChange={(e) => setFields({ ...fields, firstName: e.target.value })}
+                  />
+                </div>
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>Last Name</label>
+                  <input
+                    type="text"
+                    required
+                    disabled={isLoading}
+                    placeholder="Doe"
+                    style={styles.input}
+                    value={fields.lastName}
+                    onChange={(e) => setFields({ ...fields, lastName: e.target.value })}
+                  />
+                </div>
               </div>
               <div style={styles.inputGroup}>
-                <label style={styles.label}>Last Name</label>
-                <input
-                  type="text"
+                <label style={styles.label}>Account Role</label>
+                <select
                   required
                   disabled={isLoading}
-                  placeholder="Doe"
                   style={styles.input}
-                  value={fields.lastName}
-                  onChange={(e) => setFields({ ...fields, lastName: e.target.value })}
-                />
+                  value={fields.role}
+                  onChange={(e) => setFields({ ...fields, role: e.target.value })}
+                >
+                  <option value="Customer">Customer</option>
+                  <option value="Seller">Seller</option>
+                  <option value="Admin">Admin</option>
+                </select>
               </div>
-            </div>
+            </>
           )}
 
           <div style={styles.inputGroup}>
@@ -181,11 +196,11 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
               </>
             ) : isRegisterMode ? (
               <>
-                Register Core Token <UserPlus size={16} />
+                Create Account <UserPlus size={16} />
               </>
             ) : (
               <>
-                Verify Portal Context <LogIn size={16} />
+                Login <LogIn size={16} />
               </>
             )}
           </button>
@@ -193,7 +208,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
 
         <div style={styles.footer}>
           <span style={styles.footerText}>
-            {isRegisterMode ? 'Have an operational signature? ' : 'Missing verified registry credentials? '}
+            {isRegisterMode ? 'Already have an account? ' : 'New to CoreK? '}
             <strong 
               style={styles.toggleLink} 
               onClick={() => {
@@ -203,7 +218,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
                 }
               }}
             >
-              {isRegisterMode ? 'Sign In' : 'Create Registry Account'}
+              {isRegisterMode ? 'Login' : 'Create Account'}
             </strong>
           </span>
         </div>

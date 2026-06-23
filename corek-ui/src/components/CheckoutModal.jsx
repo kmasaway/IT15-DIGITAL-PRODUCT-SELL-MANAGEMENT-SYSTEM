@@ -1,5 +1,4 @@
-import React from 'react';
-import { X, ShieldCheck, CreditCard, Sparkles, CheckCircle2, ArrowRight } from 'lucide-react';
+import { X, ShieldCheck, CreditCard, CheckCircle2, ArrowRight } from 'lucide-react';
 
 export default function CheckoutModal({
   selectedProduct,

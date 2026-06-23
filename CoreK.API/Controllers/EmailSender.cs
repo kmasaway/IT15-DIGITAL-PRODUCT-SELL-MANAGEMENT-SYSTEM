@@ -15,8 +15,8 @@ namespace CoreK.API.Controllers
             _configuration = configuration;
         }
 
-        // DISPATCH 1: Sends the initial Guid link to verify the profile registry
-        public async Task SendVerificationEmailAsync(string toEmail, string verificationToken)
+        // DISPATCH 1: Sends the 6-digit code needed to verify the profile registry
+        public async Task SendVerificationCodeAsync(string toEmail, string verificationCode)
         {
             var smtpServer = "smtp.gmail.com";
             var smtpPort = 587;
@@ -29,15 +29,13 @@ namespace CoreK.API.Controllers
                 throw new InvalidOperationException("SMTP Configuration keys are missing from appsettings.json!");
             }
 
-            var verificationLink = $"http://localhost:5132/api/Auth/verify-email?token={verificationToken}";
-
             var fromAddress = new MailAddress(senderEmail, "CoreK Security Portal");
             var toAddress = new MailAddress(toEmail);
 
             var mailMessage = new MailMessage(fromAddress, toAddress)
             {
-                Subject = "Verify Your CoreK System Registry Account",
-                Body = $"<h3>Welcome to CoreK!</h3><p>Please click the link below to verify your identity portal context:</p><a href='{verificationLink}' style='background:#00bfa5;color:white;padding:10px 15px;text-decoration:none;border-radius:5px;display:inline-block;font-weight:bold;'>Click here to verify email</a>",
+                Subject = "Your CoreK Verification Code",
+                Body = $"<h3>Welcome to CoreK!</h3><p>Use this 6-digit code to verify your account:</p><div style='font-size:28px;font-weight:800;letter-spacing:6px;background:#eef6f2;color:#0f291e;border:1px solid #bfe0d3;border-radius:12px;padding:14px 18px;display:inline-block;'>{verificationCode}</div><p>This code is required before you can sign in.</p>",
                 IsBodyHtml = true
             };
 

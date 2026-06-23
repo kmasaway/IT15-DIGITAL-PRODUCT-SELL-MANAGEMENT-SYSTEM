@@ -1,4 +1,5 @@
 using CoreK.API.Data;
+using CoreK.API.Models;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 
@@ -27,6 +28,24 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.Migrate();
+
+    if (!db.Categories.Any())
+    {
+        db.Categories.AddRange(
+            new Category { CategoryName = "Software", Description = "Applications, tools, scripts, and developer utilities." },
+            new Category { CategoryName = "Templates", Description = "Business, design, website, and document templates." },
+            new Category { CategoryName = "Graphics", Description = "Logos, UI kits, illustrations, and visual assets." },
+            new Category { CategoryName = "Music", Description = "Audio packs, beats, loops, and sound effects." },
+            new Category { CategoryName = "3D Models", Description = "Meshes, renders, models, and printable assets." }
+        );
+        db.SaveChanges();
+    }
+}
 
 if (app.Environment.IsDevelopment())
 {

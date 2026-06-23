@@ -13,6 +13,12 @@ namespace CoreK.API.Models
         
         // Role property to support Role-Based Access Control (RBAC)
         public string Role { get; set; } = "Customer"; // Default role: Customer, Admin, Seller
+
+        public string? PhoneNumber { get; set; }
+        public string? Bio { get; set; }
+        public string? PayoutMethod { get; set; }
+        public string? PayoutAccountName { get; set; }
+        public string? PayoutAccountNumber { get; set; }
         
         // --- ADDED FOR GMAIL/EMAIL VERIFICATION PIPELINE ---
         public bool IsEmailVerified { get; set; } = false;

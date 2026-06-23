@@ -1,12 +1,20 @@
-import React, { useState } from 'react';
+import { useMemo, useState } from 'react';
 import LandingPage from './pages/LandingPage';
 import AuthModal from './components/AuthModal';
 import Dashboard from './pages/Dashboard';
 
 export default function App() {
+  const savedUser = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem('corek_user') || 'null');
+    } catch {
+      return null;
+    }
+  }, []);
+
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [userSessionName, setUserSessionName] = useState('');
+  const [sessionUser, setSessionUser] = useState(savedUser);
+  const isAuthenticated = Boolean(sessionUser);
 
   // Smoothly invokes modal initialization pipelines
   const handleOpenAuthModal = () => {
@@ -18,16 +26,18 @@ export default function App() {
   };
 
   // Coordinates authentication data context ingestion dynamically
-  const handleLoginSuccess = (name) => {
-    setUserSessionName(name);
-    setIsAuthenticated(true);
+  const handleLoginSuccess = (user) => {
+    const nextUser = user || { userId: 1, fullName: 'CoreK User', role: 'Customer' };
+    setSessionUser(nextUser);
+    localStorage.setItem('corek_user', JSON.stringify(nextUser));
     setIsAuthModalOpen(false);
   };
 
   // Safely destroys state token context parameters for session logout
   const handleLogout = () => {
-    setIsAuthenticated(false);
-    setUserSessionName('');
+    setSessionUser(null);
+    localStorage.removeItem('corek_user');
+    localStorage.removeItem('sys_auth_token');
   };
 
   return (
@@ -40,27 +50,22 @@ export default function App() {
         </div>
         <nav style={styles.navLinks}>
           {!isAuthenticated ? (
-            <>
-              <button 
-                style={styles.navItemLink} 
-                onClick={handleOpenAuthModal}
-              >
-                Register
-              </button>
-              <button 
-                style={styles.navItemLinkPrimary} 
-                onClick={handleOpenAuthModal}
-              >
-                Login
-              </button>
-            </>
-          ) : (
             <button 
               style={styles.navItemLinkPrimary} 
-              onClick={handleLogout}
+              onClick={handleOpenAuthModal}
             >
-              Sign Out
+              Login
             </button>
+          ) : (
+            <div style={styles.sessionGroup}>
+              <span style={styles.sessionText}>{sessionUser?.fullName || 'CoreK User'}</span>
+              <button 
+                style={styles.navItemLinkPrimary} 
+                onClick={handleLogout}
+              >
+                Sign Out
+              </button>
+            </div>
           )}
         </nav>
       </header>
@@ -70,7 +75,7 @@ export default function App() {
         {!isAuthenticated ? (
           <LandingPage onOpenAuthModal={handleOpenAuthModal} />
         ) : (
-          <Dashboard userSessionName={userSessionName} onLogout={handleLogout} />
+          <Dashboard user={sessionUser} onLogout={handleLogout} />
         )}
       </div>
 
@@ -78,7 +83,7 @@ export default function App() {
       <AuthModal 
         isOpen={isAuthModalOpen} 
         onClose={handleCloseAuthModal} 
-        onLoginSuccess={handleLoginSuccess} 
+        onAuthSuccess={handleLoginSuccess} 
       />
     </div>
   );
@@ -125,6 +130,16 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '1.5rem'
+  },
+  sessionGroup: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '1rem'
+  },
+  sessionText: {
+    color: '#2d4a3e',
+    fontWeight: '700',
+    fontSize: '0.9rem'
   },
   navItemLink: {
     border: 'none',

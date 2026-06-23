@@ -3,8 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using CoreK.API.Data;
 using CoreK.API.Models;
 using CoreK.API.DTOs;
-using Microsoft.AspNetCore.Authorization;
-using System.Security.Claims;
 
 namespace CoreK.API.Controllers
 {
@@ -21,9 +19,8 @@ namespace CoreK.API.Controllers
             _environment = environment;
         }
 
-        // 1. GET ALL ACTIVE PRODUCTS (For Customers browsing the Marketplace)
         [HttpGet]
-        public async Task<IActionResult> GetAllProducts([FromQuery] int? categoryId)
+        public async Task<IActionResult> GetAllProducts([FromQuery] int? categoryId, [FromQuery] string? search)
         {
             var query = _context.Products
                 .Include(p => p.Category)
@@ -35,31 +32,121 @@ namespace CoreK.API.Controllers
                 query = query.Where(p => p.CategoryId == categoryId.Value);
             }
 
-            var products = await query.ToListAsync();
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.Trim();
+                query = query.Where(p => p.Title.Contains(term) || p.Description.Contains(term));
+            }
+
+            var products = await query
+                .OrderByDescending(p => p.CreatedAt)
+                .Select(p => new
+                {
+                    p.ProductId,
+                    p.SellerId,
+                    p.CategoryId,
+                    p.Title,
+                    p.Description,
+                    p.Price,
+                    p.IsActive,
+                    p.CreatedAt,
+                    Category = p.Category == null ? "Digital Product" : p.Category.CategoryName,
+                    CategoryName = p.Category == null ? "Digital Product" : p.Category.CategoryName,
+                    VersionCount = p.Versions.Count,
+                    LatestVersion = p.Versions
+                        .OrderByDescending(v => v.ReleaseDate)
+                        .Select(v => v.VersionNumber)
+                        .FirstOrDefault() ?? "1.0.0",
+                    Versions = p.Versions
+                        .OrderByDescending(v => v.ReleaseDate)
+                        .Select(v => new
+                        {
+                            v.VersionId,
+                            v.VersionNumber,
+                            v.Changelog,
+                            v.ReleaseDate
+                        })
+                })
+                .ToListAsync();
+
             return Ok(products);
         }
 
-        // 2. CREATE PRODUCT LISTING WITH FIRST INITIAL FILE VERSION
-        // Note: We use [FromForm] so the endpoint accepts file uploads alongside json fields
+        [HttpGet("{productId}")]
+        public async Task<IActionResult> GetProduct(int productId)
+        {
+            var product = await _context.Products
+                .Include(p => p.Category)
+                .Include(p => p.Versions)
+                .FirstOrDefaultAsync(p => p.ProductId == productId);
+
+            if (product == null) return NotFound("Product listing not found.");
+
+            return Ok(new
+            {
+                product.ProductId,
+                product.SellerId,
+                product.CategoryId,
+                product.Title,
+                product.Description,
+                product.Price,
+                product.IsActive,
+                product.CreatedAt,
+                Category = product.Category?.CategoryName ?? "Digital Product",
+                CategoryName = product.Category?.CategoryName ?? "Digital Product",
+                Versions = product.Versions
+                    .OrderByDescending(v => v.ReleaseDate)
+                    .Select(v => new
+                    {
+                        v.VersionId,
+                        v.VersionNumber,
+                        v.Changelog,
+                        v.ReleaseDate
+                    })
+            });
+        }
+
+        [HttpGet("seller/{sellerId}")]
+        public async Task<IActionResult> GetSellerProducts(int sellerId)
+        {
+            var products = await _context.Products
+                .Include(p => p.Category)
+                .Include(p => p.Versions)
+                .Where(p => p.SellerId == sellerId)
+                .OrderByDescending(p => p.CreatedAt)
+                .Select(p => new
+                {
+                    p.ProductId,
+                    p.CategoryId,
+                    p.Title,
+                    p.Description,
+                    p.Price,
+                    p.IsActive,
+                    p.CreatedAt,
+                    Category = p.Category == null ? "Digital Product" : p.Category.CategoryName,
+                    VersionCount = p.Versions.Count,
+                    LatestVersion = p.Versions
+                        .OrderByDescending(v => v.ReleaseDate)
+                        .Select(v => v.VersionNumber)
+                        .FirstOrDefault() ?? "1.0.0"
+                })
+                .ToListAsync();
+
+            return Ok(products);
+        }
+
         [HttpPost("upload")]
-        public async Task<IActionResult> UploadProduct([FromForm] CreateProductDto productDto, IFormFile file)
+        public async Task<IActionResult> UploadProduct([FromForm] CreateProductDto productDto, IFormFile? file)
         {
             if (file == null || file.Length == 0)
                 return BadRequest("A digital file asset must be provided.");
 
-            // Hardcoded Seller ID for testing until role guarding is turned on.
-            // Later this will automatically grab the ID out of your JWT token: 
-            // int sellerId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-            int mockSellerId = 1; 
-
-            // Verify Category Exists
             var categoryExists = await _context.Categories.AnyAsync(c => c.CategoryId == productDto.CategoryId);
             if (!categoryExists) return BadRequest("Invalid category specified.");
 
-            // Create Product Metadata Reference
             var product = new Product
             {
-                SellerId = mockSellerId,
+                SellerId = productDto.SellerId <= 0 ? 1 : productDto.SellerId,
                 CategoryId = productDto.CategoryId,
                 Title = productDto.Title,
                 Description = productDto.Description,
@@ -69,20 +156,8 @@ namespace CoreK.API.Controllers
             _context.Products.Add(product);
             await _context.SaveChangesAsync(); // Saves product first to generate its unique ProductId
 
-            // Handle the physical file storage on disk
-            string uploadsFolder = Path.Combine(_environment.ContentRootPath, "wwwroot", "uploads");
-            if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);
+            string filePath = await SaveUploadedAsset(file);
 
-            // Generate unique filename to prevent overwriting
-            string uniqueFileName = $"{Guid.NewGuid()}_{file.FileName}";
-            string filePath = Path.Combine(uploadsFolder, uniqueFileName);
-
-            using (var fileStream = new FileStream(filePath, FileMode.Create))
-            {
-                await file.CopyToAsync(fileStream);
-            }
-
-            // Create initial version reference tracking back to the saved path
             var initialVersion = new ProductVersion
             {
                 ProductId = product.ProductId,
@@ -97,23 +172,47 @@ namespace CoreK.API.Controllers
             return Ok(new { message = "Product and initial version uploaded successfully!", productId = product.ProductId });
         }
 
-        // 3. PUSH NEW UPDATE VERSION (For Sellers upgrading software/templates)
+        [HttpPut("{productId}")]
+        public async Task<IActionResult> UpdateProduct(int productId, [FromBody] UpdateProductDto productDto)
+        {
+            var product = await _context.Products.FindAsync(productId);
+            if (product == null) return NotFound("Product listing not found.");
+
+            var categoryExists = await _context.Categories.AnyAsync(c => c.CategoryId == productDto.CategoryId);
+            if (!categoryExists) return BadRequest("Invalid category specified.");
+
+            product.CategoryId = productDto.CategoryId;
+            product.Title = productDto.Title;
+            product.Description = productDto.Description;
+            product.Price = productDto.Price;
+            product.IsActive = productDto.IsActive;
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Product listing updated successfully." });
+        }
+
+        [HttpDelete("{productId}")]
+        public async Task<IActionResult> DeactivateProduct(int productId)
+        {
+            var product = await _context.Products.FindAsync(productId);
+            if (product == null) return NotFound("Product listing not found.");
+
+            product.IsActive = false;
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Product listing has been deactivated." });
+        }
+
         [HttpPost("{productId}/add-version")]
-        public async Task<IActionResult> AddNewVersion(int productId, [FromForm] AddVersionDto versionDto, IFormFile file)
+        public async Task<IActionResult> AddNewVersion(int productId, [FromForm] AddVersionDto versionDto, IFormFile? file)
         {
             var product = await _context.Products.FindAsync(productId);
             if (product == null) return NotFound("Product listing not found.");
 
             if (file == null || file.Length == 0) return BadRequest("Updated file asset must be provided.");
 
-            string uploadsFolder = Path.Combine(_environment.ContentRootPath, "wwwroot", "uploads");
-            string uniqueFileName = $"{Guid.NewGuid()}_{file.FileName}";
-            string filePath = Path.Combine(uploadsFolder, uniqueFileName);
-
-            using (var fileStream = new FileStream(filePath, FileMode.Create))
-            {
-                await file.CopyToAsync(fileStream);
-            }
+            string filePath = await SaveUploadedAsset(file);
 
             var newVersion = new ProductVersion
             {
@@ -127,6 +226,22 @@ namespace CoreK.API.Controllers
             await _context.SaveChangesAsync();
 
             return Ok(new { message = $"Version {versionDto.VersionNumber} pushed successfully!" });
+        }
+
+        private async Task<string> SaveUploadedAsset(IFormFile file)
+        {
+            string uploadsFolder = Path.Combine(_environment.ContentRootPath, "wwwroot", "uploads");
+            if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);
+
+            string uniqueFileName = $"{Guid.NewGuid()}_{file.FileName}";
+            string filePath = Path.Combine(uploadsFolder, uniqueFileName);
+
+            using (var fileStream = new FileStream(filePath, FileMode.Create))
+            {
+                await file.CopyToAsync(fileStream);
+            }
+
+            return filePath;
         }
     }
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Search, LogOut } from 'lucide-react';
 
 export default function Header({ currentPage, setCurrentPage, isLoggedIn, onLogout, onOpenAuthModal, onSearchChange }) {

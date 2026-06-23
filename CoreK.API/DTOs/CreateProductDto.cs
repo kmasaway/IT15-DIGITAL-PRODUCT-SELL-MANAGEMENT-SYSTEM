@@ -16,5 +16,7 @@ namespace CoreK.API.DTOs
 
         [Required]
         public int CategoryId { get; set; }
+
+        public int SellerId { get; set; } = 1;
     }
 }

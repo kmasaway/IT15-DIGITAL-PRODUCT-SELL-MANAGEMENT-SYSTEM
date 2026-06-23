@@ -35,7 +35,7 @@ namespace CoreK.API.Controllers
             }
 
             string passwordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password);
-            string verificationToken = Guid.NewGuid().ToString();
+            string verificationCode = Random.Shared.Next(100000, 999999).ToString();
 
             var newUser = new User
             {
@@ -44,7 +44,7 @@ namespace CoreK.API.Controllers
                 PasswordHash = passwordHash,
                 Role = dto.Role,
                 IsEmailVerified = false, 
-                EmailVerificationToken = verificationToken
+                EmailVerificationToken = verificationCode
             };
 
             _context.Users.Add(newUser);
@@ -52,15 +52,58 @@ namespace CoreK.API.Controllers
 
             try
             {
-                await _emailSender.SendVerificationEmailAsync(newUser.Email, verificationToken);
-                Console.WriteLine(">>> SUCCESS: Initial validation link sent via Gmail SMTP.");
+                await _emailSender.SendVerificationCodeAsync(newUser.Email, verificationCode);
+                Console.WriteLine(">>> SUCCESS: Email verification code sent via SMTP.");
+                return Ok(new { message = "Registration successful! Enter the 6-digit code sent to your email.", requiresVerification = true, email = newUser.Email });
             }
             catch (Exception ex)
             {
                 Console.WriteLine($">>> SMTP REGISTER ERROR: {ex.Message}");
+
+                _context.Users.Remove(newUser);
+                await _context.SaveChangesAsync();
+
+                return StatusCode(500, new
+                {
+                    message = "Registration could not continue because email verification is not configured. Please set EmailSettings:SenderEmail and EmailSettings:AppPassword in the API settings."
+                });
+            }
+        }
+
+        [HttpPost("verify-code")]
+        public async Task<IActionResult> VerifyEmailCode([FromBody] VerifyEmailCodeDto dto)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
+            if (user == null)
+            {
+                return BadRequest("No account was found for this email address.");
             }
 
-            return Ok(new { message = "Registration successful! A verification link has been pushed to your Gmail address." });
+            if (user.IsEmailVerified)
+            {
+                return Ok(new { message = "This account is already verified. You can now sign in." });
+            }
+
+            if (user.EmailVerificationToken != dto.Code.Trim())
+            {
+                return BadRequest("Invalid verification code. Please check your email and try again.");
+            }
+
+            user.IsEmailVerified = true;
+            user.EmailVerificationToken = null;
+            await _context.SaveChangesAsync();
+
+            try
+            {
+                await _emailSender.SendWelcomeConfirmationEmailAsync(user.Email, user.FullName);
+                Console.WriteLine($">>> SUCCESS: Verification confirmation sent to active user: {user.Email}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($">>> SMTP CONFIRMATION ERROR: {ex.Message}");
+            }
+
+            return Ok(new { message = "Email verified successfully! You can now sign in." });
         }
 
         // 2. VERIFY EMAIL ENDPOINT (Now fires second verification confirmation email)
@@ -110,14 +153,26 @@ namespace CoreK.API.Controllers
 
             if (!user.IsEmailVerified)
             {
-                return BadRequest("This system profile requires active identity verification. Please clear your registration check via your Gmail inbox.");
+                return BadRequest("Please verify your account using the 6-digit code sent to your email before signing in.");
             }
 
             var token = CreateJwtToken(user);
 
             return Ok(new { 
                 token = token,
-                user = new { user.UserId, user.FullName, user.Email, user.Role }
+                user = new
+                {
+                    user.UserId,
+                    user.FullName,
+                    user.Email,
+                    user.Role,
+                    user.PhoneNumber,
+                    user.Bio,
+                    user.PayoutMethod,
+                    user.PayoutAccountName,
+                    user.PayoutAccountNumber,
+                    user.IsTwoFactorEnabled
+                }
             });
         }
 

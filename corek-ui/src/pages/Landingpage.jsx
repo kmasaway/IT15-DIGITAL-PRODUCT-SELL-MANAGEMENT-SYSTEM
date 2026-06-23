@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ArrowRight, UploadCloud, Zap, Coins, CheckCircle, Sparkles, ArrowUpRight, Cpu, ChevronDown, Mail, Eye } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowRight, UploadCloud, Zap, Coins, CheckCircle, ArrowUpRight, Cpu, ChevronDown, Mail, Eye } from 'lucide-react';
 
 export default function LandingPage({ onOpenAuthModal }) {
   const [activeFaq, setActiveFaq] = useState(null);

@@ -1,5 +1,4 @@
-import React from 'react';
-import { LayoutGrid, ShoppingBag, Eye, Star, ArrowUpRight } from 'lucide-react';
+import { LayoutGrid, Star, ArrowUpRight } from 'lucide-react';
 
 export default function HomePage({ products, onOpenCheckout }) {
   return (

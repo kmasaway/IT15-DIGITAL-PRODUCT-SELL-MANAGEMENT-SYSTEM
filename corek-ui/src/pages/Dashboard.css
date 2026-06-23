@@ -1,0 +1,1739 @@
+.dashboard-shell {
+  min-height: calc(100vh - 74px);
+  background: #f6f7f9;
+  color: #17201b;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+}
+
+.dashboard-shell.role-admin {
+  background: #eef1f4;
+}
+
+.dashboard-shell.role-seller {
+  background: #fff7df;
+  color: #1b1611;
+}
+
+.dashboard-shell.role-customer {
+  background: #f4fbff;
+  color: #10202b;
+}
+
+.dashboard-sidebar {
+  background: #ffffff;
+  border-right: 1px solid #dde4e0;
+  padding: 24px 18px;
+  position: sticky;
+  top: 74px;
+  height: calc(100vh - 74px);
+}
+
+.role-admin .dashboard-sidebar {
+  background: #111820;
+  border-right-color: #293442;
+}
+
+.role-seller .dashboard-sidebar {
+  background: #fffbef;
+  border-right: 3px solid #17110d;
+}
+
+.role-customer .dashboard-sidebar {
+  background: #ffffff;
+  border-right-color: #cbe4f2;
+}
+
+.dashboard-user {
+  border: 1px solid #dde4e0;
+  border-radius: 8px;
+  padding: 16px;
+  background: #fafcfb;
+  margin-bottom: 18px;
+}
+
+.role-admin .dashboard-user {
+  background: #1b2633;
+  border-color: #334154;
+  color: #ffffff;
+}
+
+.role-seller .dashboard-user {
+  background: #ffdd5a;
+  border: 3px solid #17110d;
+  box-shadow: 5px 5px 0 #17110d;
+}
+
+.role-customer .dashboard-user {
+  background: #e7f7ff;
+  border-color: #b9dcec;
+}
+
+.dashboard-user strong {
+  display: block;
+  font-size: 0.98rem;
+  margin-bottom: 4px;
+}
+
+.dashboard-user span {
+  color: #61746a;
+  font-size: 0.82rem;
+}
+
+.dashboard-user > span:not(.role-label-clean) {
+  display: none;
+}
+
+.role-admin .dashboard-user span {
+  color: #b8c5d4;
+}
+
+.role-seller .dashboard-user span {
+  color: #3b2a12;
+  font-weight: 800;
+}
+
+.dashboard-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dashboard-tab {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #3d4f46;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+}
+
+.dashboard-tab:hover,
+.dashboard-tab.active {
+  background: #10231d;
+  color: #ffffff;
+}
+
+.role-admin .dashboard-tab {
+  color: #c8d3df;
+}
+
+.role-admin .dashboard-tab:hover,
+.role-admin .dashboard-tab.active {
+  background: #35d399;
+  color: #08120e;
+}
+
+.role-seller .dashboard-tab {
+  color: #17110d;
+  border: 2px solid transparent;
+}
+
+.role-seller .dashboard-tab:hover,
+.role-seller .dashboard-tab.active {
+  background: #ff90e8;
+  border-color: #17110d;
+  box-shadow: 3px 3px 0 #17110d;
+  color: #17110d;
+}
+
+.role-customer .dashboard-tab:hover,
+.role-customer .dashboard-tab.active {
+  background: #126b8f;
+  color: #ffffff;
+}
+
+.dashboard-content {
+  padding: 28px;
+  width: 100%;
+  max-width: 1500px;
+}
+
+.role-hero {
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 22px;
+  display: flex;
+  justify-content: space-between;
+  align-items: stretch;
+  gap: 22px;
+}
+
+.role-hero h1 {
+  margin: 6px 0 8px;
+  font-size: 2rem;
+  letter-spacing: 0;
+}
+
+.role-hero p {
+  margin: 0;
+  max-width: 720px;
+  line-height: 1.55;
+}
+
+.role-eyebrow {
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.admin-hero {
+  background: #111820;
+  border: 1px solid #293442;
+  color: #ffffff;
+}
+
+.admin-hero p,
+.admin-hero .role-eyebrow {
+  color: #b8c5d4;
+}
+
+.admin-signal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(130px, 1fr));
+  gap: 10px;
+  min-width: 420px;
+}
+
+.admin-signal-grid div {
+  background: #1b2633;
+  border: 1px solid #334154;
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+}
+
+.seller-roadmap {
+  background: #ffdd5a;
+  border: 3px solid #17110d;
+  box-shadow: 7px 7px 0 #17110d;
+}
+
+.seller-roadmap .role-eyebrow {
+  color: #7a3d00;
+}
+
+.roadmap-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(90px, 1fr));
+  gap: 10px;
+  min-width: 480px;
+}
+
+.roadmap-step {
+  background: #ffffff;
+  border: 3px solid #17110d;
+  border-radius: 8px;
+  padding: 14px;
+  box-shadow: 4px 4px 0 #17110d;
+}
+
+.roadmap-step strong {
+  display: block;
+  color: #ff4f7b;
+  font-size: 1.4rem;
+}
+
+.roadmap-step span {
+  font-weight: 900;
+}
+
+.customer-hero {
+  background: linear-gradient(135deg, #d9f3ff 0%, #ffffff 58%, #f4f0ff 100%);
+  border: 1px solid #b9dcec;
+}
+
+.customer-hero .role-eyebrow {
+  color: #126b8f;
+}
+
+.customer-quick-card {
+  min-width: 190px;
+  background: #ffffff;
+  border: 1px solid #b9dcec;
+  border-radius: 8px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.customer-quick-card strong {
+  font-size: 2.4rem;
+}
+
+.customer-quick-card span {
+  color: #526b79;
+  font-weight: 800;
+}
+
+.module-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 20px;
+}
+
+.module-header h1 {
+  font-size: 1.65rem;
+  margin: 0 0 6px;
+  letter-spacing: 0;
+}
+
+.module-header p {
+  color: #61746a;
+  margin: 0;
+  max-width: 760px;
+}
+
+.toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.grid-2,
+.grid-3,
+.grid-4 {
+  display: grid;
+  gap: 16px;
+}
+
+.grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.grid-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.panel {
+  background: #ffffff;
+  border: 1px solid #dde4e0;
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.role-admin .panel {
+  border-color: #cfd7df;
+}
+
+.role-seller .panel {
+  border: 3px solid #17110d;
+  box-shadow: 4px 4px 0 #17110d;
+}
+
+.role-customer .panel {
+  border-color: #cbe4f2;
+}
+
+.panel h2,
+.panel h3 {
+  margin: 0 0 14px;
+  font-size: 1rem;
+  letter-spacing: 0;
+}
+
+.metric {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  min-height: 112px;
+}
+
+.metric span {
+  display: block;
+  color: #61746a;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.metric strong {
+  display: block;
+  font-size: 2rem;
+  line-height: 1;
+  margin-top: 12px;
+}
+
+.metric.revenue {
+  border-color: #b9d9d0;
+}
+
+.metric.orders {
+  border-color: #d8cda4;
+}
+
+.metric.support {
+  border-color: #dac2c2;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field.full {
+  grid-column: 1 / -1;
+}
+
+.field label {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #33443c;
+}
+
+.field input,
+.field textarea,
+.field select,
+.search-input {
+  width: 100%;
+  border: 1px solid #cfd9d5;
+  background: #fbfcfb;
+  color: #17201b;
+  border-radius: 8px;
+  padding: 10px 11px;
+  font-size: 0.92rem;
+  outline: none;
+}
+
+.field textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.checkbox-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+}
+
+.checkbox-row input {
+  width: auto;
+}
+
+.button {
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #10231d;
+  color: #ffffff;
+}
+
+.role-seller .button {
+  background: #17110d;
+  border: 2px solid #17110d;
+  box-shadow: 3px 3px 0 #ff90e8;
+}
+
+.role-seller .button.secondary {
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.role-customer .button {
+  background: #126b8f;
+}
+
+.role-admin .button {
+  background: #111820;
+}
+
+.role-admin .button.secondary {
+  background: #dde5ea;
+}
+
+.button.secondary {
+  background: #eef2f0;
+  color: #17201b;
+}
+
+.button.warning {
+  background: #8c5d18;
+}
+
+.button.danger {
+  background: #8d2d35;
+}
+
+.button:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+.data-table th,
+.data-table td {
+  text-align: left;
+  padding: 12px 10px;
+  border-bottom: 1px solid #edf1ef;
+  vertical-align: middle;
+  font-size: 0.9rem;
+}
+
+.data-table th {
+  color: #61746a;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+}
+
+.data-table td.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 0.76rem;
+  font-weight: 800;
+  background: #edf1ef;
+  color: #33443c;
+}
+
+.status-pill.good {
+  background: #dff4ec;
+  color: #11664f;
+}
+
+.status-pill.warn {
+  background: #fbefd2;
+  color: #805915;
+}
+
+.status-pill.bad {
+  background: #f9dddd;
+  color: #8d2d35;
+}
+
+.module-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.notice {
+  border-radius: 8px;
+  padding: 12px 14px;
+  border: 1px solid #cfe1d9;
+  background: #f3faf7;
+  color: #1d5f4c;
+  font-weight: 700;
+}
+
+.notice.error {
+  background: #fff3f3;
+  border-color: #efc6c6;
+  color: #8d2d35;
+}
+
+.empty-state {
+  color: #61746a;
+  background: #fafcfb;
+  border: 1px dashed #cfd9d5;
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.mini-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mini-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom: 1px solid #edf1ef;
+  padding-bottom: 10px;
+}
+
+.mini-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.mini-row span {
+  color: #61746a;
+  font-size: 0.82rem;
+}
+
+.customer-market-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+}
+
+.market-product-card {
+  background: #ffffff;
+  border: 1px solid #cbe4f2;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 380px;
+}
+
+.market-product-art {
+  min-height: 132px;
+  background:
+    linear-gradient(135deg, rgba(18, 107, 143, 0.16), rgba(255, 79, 123, 0.13)),
+    repeating-linear-gradient(45deg, #ffffff 0, #ffffff 10px, #eef8fd 10px, #eef8fd 20px);
+  padding: 16px;
+  display: flex;
+  align-items: flex-start;
+}
+
+.market-product-art span {
+  background: #ffffff;
+  border: 1px solid #b9dcec;
+  border-radius: 999px;
+  padding: 5px 10px;
+  color: #126b8f;
+  font-weight: 900;
+  font-size: 0.76rem;
+}
+
+.market-product-body {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+}
+
+.market-product-meta,
+.market-product-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.market-product-meta > span {
+  color: #526b79;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.market-product-body h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.market-product-body p {
+  color: #526b79;
+  line-height: 1.5;
+  margin: 0;
+  flex: 1;
+}
+
+.market-product-footer strong {
+  font-size: 1.35rem;
+}
+
+@media (max-width: 1100px) {
+  .dashboard-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-sidebar {
+    position: static;
+    height: auto;
+    border-right: 0;
+    border-bottom: 1px solid #dde4e0;
+  }
+
+  .dashboard-tabs {
+    flex-direction: row;
+    overflow-x: auto;
+  }
+
+  .dashboard-tab {
+    min-width: max-content;
+  }
+
+  .grid-3,
+  .grid-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .role-hero {
+    flex-direction: column;
+  }
+
+  .admin-signal-grid,
+  .roadmap-steps {
+    min-width: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .dashboard-content {
+    padding: 18px;
+  }
+
+  .module-header {
+    flex-direction: column;
+  }
+
+  .grid-2,
+  .grid-3,
+  .grid-4,
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-signal-grid,
+  .roadmap-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .role-hero h1 {
+    font-size: 1.5rem;
+  }
+}
+
+/* Gumroad-style skin: bold outlines, bright blocks, and storefront-like cards. */
+.dashboard-shell {
+  --ink: #17110d;
+  --paper: #fffaf2;
+  --yellow: #ffdd5a;
+  --pink: #ff90e8;
+  --green: #35d399;
+  --blue: #6ecff6;
+  --lavender: #c7b9ff;
+  --shadow: 6px 6px 0 var(--ink);
+  background:
+    linear-gradient(90deg, rgba(23, 17, 13, 0.04) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(23, 17, 13, 0.04) 1px, transparent 1px),
+    var(--paper);
+  background-size: 34px 34px;
+  color: var(--ink);
+}
+
+.dashboard-sidebar {
+  background: #ffffff;
+  border-right: 4px solid var(--ink);
+}
+
+.role-admin .dashboard-sidebar,
+.role-seller .dashboard-sidebar,
+.role-customer .dashboard-sidebar {
+  background: #ffffff;
+  border-right: 4px solid var(--ink);
+}
+
+.dashboard-user {
+  border: 3px solid var(--ink);
+  border-radius: 8px;
+  box-shadow: 4px 4px 0 var(--ink);
+  color: var(--ink);
+}
+
+.role-admin .dashboard-user {
+  background: var(--green);
+  color: var(--ink);
+}
+
+.role-seller .dashboard-user {
+  background: var(--yellow);
+}
+
+.role-customer .dashboard-user {
+  background: var(--blue);
+  border-color: var(--ink);
+}
+
+.dashboard-user strong {
+  font-size: 1.08rem;
+  font-weight: 950;
+}
+
+.dashboard-user span,
+.role-admin .dashboard-user span,
+.role-seller .dashboard-user span {
+  color: var(--ink);
+  font-weight: 850;
+}
+
+.dashboard-tab {
+  border: 3px solid transparent;
+  border-radius: 8px;
+  color: var(--ink);
+  font-weight: 900;
+}
+
+.dashboard-tab:hover,
+.dashboard-tab.active,
+.role-admin .dashboard-tab:hover,
+.role-admin .dashboard-tab.active,
+.role-seller .dashboard-tab:hover,
+.role-seller .dashboard-tab.active,
+.role-customer .dashboard-tab:hover,
+.role-customer .dashboard-tab.active {
+  background: var(--pink);
+  border-color: var(--ink);
+  box-shadow: 4px 4px 0 var(--ink);
+  color: var(--ink);
+}
+
+.role-admin .dashboard-tab.active {
+  background: var(--green);
+}
+
+.role-customer .dashboard-tab.active {
+  background: var(--blue);
+}
+
+.role-hero {
+  border: 4px solid var(--ink);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  color: var(--ink);
+}
+
+.role-hero h1 {
+  font-size: clamp(2rem, 4vw, 4.2rem);
+  line-height: 0.98;
+  font-weight: 950;
+}
+
+.role-hero p {
+  color: var(--ink);
+  font-size: 1.02rem;
+  font-weight: 650;
+}
+
+.role-eyebrow {
+  color: var(--ink);
+  background: #ffffff;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  display: inline-flex;
+  padding: 5px 11px;
+}
+
+.admin-hero {
+  background: var(--green);
+  color: var(--ink);
+}
+
+.seller-roadmap {
+  background: var(--yellow);
+}
+
+.customer-hero {
+  background: var(--blue);
+}
+
+.admin-hero p,
+.admin-hero .role-eyebrow,
+.customer-hero .role-eyebrow,
+.seller-roadmap .role-eyebrow {
+  color: var(--ink);
+}
+
+.admin-signal-grid div,
+.roadmap-step,
+.customer-quick-card {
+  background: #ffffff;
+  border: 3px solid var(--ink);
+  border-radius: 8px;
+  box-shadow: 4px 4px 0 var(--ink);
+  color: var(--ink);
+}
+
+.admin-signal-grid div:nth-child(1) {
+  background: var(--yellow);
+}
+
+.admin-signal-grid div:nth-child(2) {
+  background: var(--pink);
+}
+
+.admin-signal-grid div:nth-child(3) {
+  background: var(--blue);
+}
+
+.roadmap-step:nth-child(2) {
+  background: var(--pink);
+}
+
+.roadmap-step:nth-child(3) {
+  background: var(--green);
+}
+
+.roadmap-step:nth-child(4) {
+  background: var(--blue);
+}
+
+.panel,
+.role-admin .panel,
+.role-seller .panel,
+.role-customer .panel {
+  background: #ffffff;
+  border: 3px solid var(--ink);
+  border-radius: 8px;
+  box-shadow: 5px 5px 0 var(--ink);
+}
+
+.panel h2,
+.panel h3,
+.module-header h1 {
+  font-weight: 950;
+}
+
+.module-header {
+  background: #ffffff;
+  border: 3px solid var(--ink);
+  border-radius: 8px;
+  box-shadow: 4px 4px 0 var(--ink);
+  padding: 16px;
+}
+
+.module-header p {
+  color: #3a3028;
+  font-weight: 650;
+}
+
+.metric.revenue {
+  background: var(--yellow);
+}
+
+.metric.orders {
+  background: var(--blue);
+}
+
+.metric.support {
+  background: var(--pink);
+}
+
+.metric:not(.revenue):not(.orders):not(.support) {
+  background: var(--green);
+}
+
+.metric span,
+.metric strong {
+  color: var(--ink);
+}
+
+.field input,
+.field textarea,
+.field select,
+.search-input,
+.data-table select {
+  border: 3px solid var(--ink);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.field input:focus,
+.field textarea:focus,
+.field select:focus,
+.search-input:focus {
+  box-shadow: 4px 4px 0 var(--ink) !important;
+}
+
+.button,
+.role-admin .button,
+.role-seller .button,
+.role-customer .button {
+  border: 3px solid var(--ink);
+  border-radius: 8px;
+  background: var(--ink);
+  color: #ffffff;
+  box-shadow: 4px 4px 0 var(--pink);
+  font-weight: 950;
+}
+
+.button.secondary,
+.role-admin .button.secondary,
+.role-seller .button.secondary {
+  background: #ffffff;
+  color: var(--ink);
+  box-shadow: 4px 4px 0 var(--blue);
+}
+
+.button.danger {
+  background: #ff4f7b;
+  color: var(--ink);
+}
+
+.data-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.data-table th {
+  background: var(--yellow);
+  border-top: 3px solid var(--ink);
+  border-bottom: 3px solid var(--ink);
+  color: var(--ink);
+}
+
+.data-table th:first-child {
+  border-left: 3px solid var(--ink);
+  border-top-left-radius: 8px;
+}
+
+.data-table th:last-child {
+  border-right: 3px solid var(--ink);
+  border-top-right-radius: 8px;
+}
+
+.data-table td {
+  background: #ffffff;
+  border-bottom: 3px solid var(--ink);
+  color: var(--ink);
+}
+
+.data-table td:first-child {
+  border-left: 3px solid var(--ink);
+}
+
+.data-table td:last-child {
+  border-right: 3px solid var(--ink);
+}
+
+.status-pill {
+  border: 2px solid var(--ink);
+  background: #ffffff;
+  color: var(--ink);
+}
+
+.status-pill.good {
+  background: var(--green);
+  color: var(--ink);
+}
+
+.status-pill.warn {
+  background: var(--yellow);
+  color: var(--ink);
+}
+
+.status-pill.bad {
+  background: #ff4f7b;
+  color: var(--ink);
+}
+
+.empty-state,
+.notice {
+  border: 3px solid var(--ink);
+  border-radius: 8px;
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+.notice {
+  background: var(--green);
+  color: var(--ink);
+}
+
+.notice.error {
+  background: #ff90e8;
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.mini-row {
+  border: 3px solid var(--ink);
+  border-radius: 8px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.mini-row:nth-child(3n + 1) {
+  background: #fff5bd;
+}
+
+.mini-row:nth-child(3n + 2) {
+  background: #dff7ed;
+}
+
+.mini-row:nth-child(3n + 3) {
+  background: #f8dcff;
+}
+
+.market-product-card {
+  border: 4px solid var(--ink);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.market-product-card:nth-child(3n + 1) .market-product-art {
+  background: var(--yellow);
+}
+
+.market-product-card:nth-child(3n + 2) .market-product-art {
+  background: var(--pink);
+}
+
+.market-product-card:nth-child(3n + 3) .market-product-art {
+  background: var(--blue);
+}
+
+.market-product-art {
+  border-bottom: 4px solid var(--ink);
+  min-height: 170px;
+  background-image:
+    radial-gradient(circle at 18px 18px, rgba(255, 255, 255, 0.65) 0 8px, transparent 9px),
+    linear-gradient(135deg, transparent, rgba(255, 255, 255, 0.35));
+  background-size: 52px 52px, 100% 100%;
+}
+
+.market-product-art span {
+  border: 3px solid var(--ink);
+  color: var(--ink);
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.market-product-body h2 {
+  font-size: 1.35rem;
+  font-weight: 950;
+}
+
+.market-product-body p,
+.market-product-meta > span {
+  color: #3a3028;
+  font-weight: 650;
+}
+
+@media (max-width: 760px) {
+  .role-hero h1 {
+    font-size: 2rem;
+  }
+
+  .dashboard-sidebar,
+  .role-admin .dashboard-sidebar,
+  .role-seller .dashboard-sidebar,
+  .role-customer .dashboard-sidebar {
+    border-right: 0;
+    border-bottom: 4px solid var(--ink);
+  }
+}
+
+/* CoreK-aligned role skin: matches the landing page visual language. */
+.dashboard-shell {
+  --core-dark: #0f291e;
+  --core-deep: #0b241a;
+  --core-teal: #00bfa5;
+  --core-mint: #bfe0d3;
+  --core-border: #e2efe9;
+  --core-soft: #f4faf7;
+  --core-text: #2d4a3e;
+  --core-muted: #5b7e6e;
+  --core-panel: #ffffff;
+  --core-shadow: 0 18px 44px rgba(15, 41, 30, 0.07);
+  background:
+    radial-gradient(circle at top right, rgba(0, 191, 165, 0.08), transparent 34%),
+    linear-gradient(180deg, #fbfdfc 0%, #f4faf7 100%);
+  color: var(--core-dark);
+}
+
+.dashboard-shell.role-admin {
+  background:
+    radial-gradient(circle at top right, rgba(15, 41, 30, 0.12), transparent 34%),
+    linear-gradient(180deg, #fbfdfc 0%, #eef6f2 100%);
+}
+
+.dashboard-shell.role-seller {
+  background:
+    radial-gradient(circle at top right, rgba(0, 191, 165, 0.12), transparent 32%),
+    linear-gradient(180deg, #fbfdfc 0%, #f1faf6 100%);
+}
+
+.dashboard-shell.role-customer {
+  background:
+    radial-gradient(circle at top right, rgba(0, 191, 165, 0.08), transparent 30%),
+    linear-gradient(180deg, #fbfdfc 0%, #f7fbfa 100%);
+}
+
+.dashboard-sidebar,
+.role-admin .dashboard-sidebar,
+.role-seller .dashboard-sidebar,
+.role-customer .dashboard-sidebar {
+  background: rgba(255, 255, 255, 0.9);
+  border-right: 1px solid var(--core-border);
+  backdrop-filter: blur(12px);
+}
+
+.dashboard-user,
+.role-admin .dashboard-user,
+.role-seller .dashboard-user,
+.role-customer .dashboard-user {
+  border: 1px solid var(--core-mint);
+  border-radius: 20px;
+  box-shadow: 0 10px 28px rgba(15, 41, 30, 0.06);
+  color: var(--core-dark);
+}
+
+.role-admin .dashboard-user {
+  background: var(--core-dark);
+  color: #ffffff;
+}
+
+.role-seller .dashboard-user {
+  background: #e9fbf6;
+}
+
+.role-customer .dashboard-user {
+  background: #ffffff;
+}
+
+.dashboard-user strong {
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.dashboard-user span,
+.role-seller .dashboard-user span,
+.role-customer .dashboard-user span {
+  color: var(--core-muted);
+  font-weight: 700;
+}
+
+.role-admin .dashboard-user span {
+  color: #c5ded3;
+}
+
+.dashboard-tab,
+.role-admin .dashboard-tab,
+.role-seller .dashboard-tab,
+.role-customer .dashboard-tab {
+  border: 1px solid transparent;
+  border-radius: 12px;
+  box-shadow: none;
+  color: var(--core-text);
+  font-weight: 700;
+}
+
+.dashboard-tab:hover,
+.dashboard-tab.active,
+.role-admin .dashboard-tab:hover,
+.role-admin .dashboard-tab.active,
+.role-seller .dashboard-tab:hover,
+.role-seller .dashboard-tab.active,
+.role-customer .dashboard-tab:hover,
+.role-customer .dashboard-tab.active {
+  border-color: var(--core-mint);
+  box-shadow: none;
+}
+
+.role-admin .dashboard-tab:hover,
+.role-admin .dashboard-tab.active {
+  background: var(--core-dark);
+  color: #ffffff;
+}
+
+.role-seller .dashboard-tab:hover,
+.role-seller .dashboard-tab.active {
+  background: rgba(0, 191, 165, 0.12);
+  color: var(--core-dark);
+}
+
+.role-customer .dashboard-tab:hover,
+.role-customer .dashboard-tab.active {
+  background: #ffffff;
+  color: var(--core-teal);
+}
+
+.role-hero,
+.admin-hero,
+.seller-roadmap,
+.customer-hero {
+  border: 1px solid var(--core-mint);
+  border-radius: 24px;
+  box-shadow: var(--core-shadow);
+  color: var(--core-dark);
+}
+
+.admin-hero {
+  background: var(--core-dark);
+  color: #ffffff;
+}
+
+.seller-roadmap {
+  background: linear-gradient(135deg, #ffffff 0%, #e6fbf6 100%);
+}
+
+.customer-hero {
+  background: linear-gradient(135deg, #ffffff 0%, #f4faf7 100%);
+}
+
+.role-hero h1 {
+  color: inherit;
+  font-size: clamp(1.6rem, 2.4vw, 2.35rem);
+  font-weight: 800;
+  line-height: 1.12;
+}
+
+.role-hero p {
+  color: var(--core-muted);
+  font-size: 0.96rem;
+  font-weight: 500;
+}
+
+.admin-hero p {
+  color: #c5ded3;
+}
+
+.role-eyebrow,
+.admin-hero .role-eyebrow,
+.seller-roadmap .role-eyebrow,
+.customer-hero .role-eyebrow {
+  background: #ffffff;
+  border: 1px solid var(--core-mint);
+  border-radius: 999px;
+  color: var(--core-text);
+  box-shadow: 0 10px 24px rgba(15, 41, 30, 0.05);
+  font-weight: 800;
+}
+
+.admin-signal-grid div,
+.roadmap-step,
+.customer-quick-card {
+  background: #ffffff;
+  border: 1px solid var(--core-border);
+  border-radius: 16px;
+  box-shadow: none;
+  color: var(--core-dark);
+}
+
+.admin-signal-grid div {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(191, 224, 211, 0.35);
+  color: #ffffff;
+}
+
+.roadmap-step strong {
+  color: var(--core-teal);
+}
+
+.panel,
+.role-admin .panel,
+.role-seller .panel,
+.role-customer .panel,
+.module-header {
+  background: var(--core-panel);
+  border: 1px solid var(--core-border);
+  border-radius: 20px;
+  box-shadow: 0 10px 28px rgba(15, 41, 30, 0.04);
+}
+
+.role-admin .panel {
+  border-color: #d8e8e1;
+}
+
+.role-seller .panel {
+  border-color: var(--core-mint);
+}
+
+.role-customer .panel {
+  border-color: var(--core-border);
+}
+
+.panel h2,
+.panel h3,
+.module-header h1 {
+  color: var(--core-dark);
+  font-weight: 800;
+}
+
+.module-header h1 {
+  font-size: 1.35rem;
+}
+
+.panel h2,
+.panel h3 {
+  font-size: 0.98rem;
+}
+
+.module-header p {
+  color: var(--core-muted);
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+
+.metric,
+.metric.revenue,
+.metric.orders,
+.metric.support,
+.metric:not(.revenue):not(.orders):not(.support) {
+  background: #ffffff;
+}
+
+.role-admin .metric.revenue,
+.role-admin .metric.orders,
+.role-admin .metric.support,
+.role-admin .metric:not(.revenue):not(.orders):not(.support) {
+  background: #102f23;
+}
+
+.role-admin .metric span,
+.role-admin .metric strong,
+.role-admin .metric svg {
+  color: #ffffff;
+}
+
+.role-seller .metric.revenue {
+  background: #e5fbf5;
+}
+
+.role-seller .metric.orders {
+  background: #f4faf7;
+}
+
+.role-seller .metric.support {
+  background: #fff8f8;
+}
+
+.role-customer .metric.revenue,
+.role-customer .metric.orders {
+  background: #f4faf7;
+}
+
+.metric span,
+.metric strong {
+  color: var(--core-dark);
+}
+
+.metric strong {
+  font-size: 1.55rem;
+}
+
+.metric span {
+  font-size: 0.72rem;
+}
+
+.field input,
+.field textarea,
+.field select,
+.search-input,
+.data-table select {
+  background: var(--core-soft);
+  border: 1px solid var(--core-mint);
+  border-radius: 12px;
+  color: var(--core-dark);
+  font-weight: 500;
+}
+
+.field input:focus,
+.field textarea:focus,
+.field select:focus,
+.search-input:focus {
+  border-color: var(--core-teal) !important;
+  box-shadow: 0 0 0 4px rgba(0, 191, 165, 0.12) !important;
+}
+
+.button,
+.role-admin .button,
+.role-seller .button,
+.role-customer .button {
+  background: var(--core-dark);
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 10px 24px rgba(15, 41, 30, 0.12);
+  color: #ffffff;
+  font-weight: 800;
+}
+
+.button.secondary,
+.role-admin .button.secondary,
+.role-seller .button.secondary,
+.role-customer .button.secondary {
+  background: #ffffff;
+  border: 1px solid var(--core-mint);
+  box-shadow: none;
+  color: var(--core-dark);
+}
+
+.button.danger {
+  background: #7a2d2d;
+  color: #ffffff;
+}
+
+.data-table {
+  border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td,
+.data-table th:first-child,
+.data-table th:last-child,
+.data-table td:first-child,
+.data-table td:last-child {
+  border-left: 0;
+  border-right: 0;
+}
+
+.data-table th {
+  background: #f4faf7;
+  border-top: 0;
+  border-bottom: 1px solid var(--core-border);
+  color: var(--core-muted);
+}
+
+.data-table td {
+  background: #ffffff;
+  border-bottom: 1px solid var(--core-border);
+  color: var(--core-dark);
+}
+
+.status-pill {
+  border: 1px solid transparent;
+  background: #eef6f2;
+  color: var(--core-text);
+}
+
+.status-pill.good {
+  background: rgba(0, 191, 165, 0.12);
+  color: #008875;
+}
+
+.status-pill.warn {
+  background: #fff6dc;
+  color: #7d5b12;
+}
+
+.status-pill.bad {
+  background: #fff0f0;
+  color: #7a2d2d;
+}
+
+.empty-state,
+.notice {
+  border: 1px solid var(--core-mint);
+  border-radius: 16px;
+  box-shadow: none;
+}
+
+.notice {
+  background: #eefbf7;
+  color: var(--core-dark);
+}
+
+.notice.error {
+  background: #fff5f5;
+  border-color: #ffcaca;
+  color: #7a2d2d;
+}
+
+.mini-row {
+  background: #ffffff;
+  border: 1px solid var(--core-border);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.mini-row:nth-child(3n + 1),
+.mini-row:nth-child(3n + 2),
+.mini-row:nth-child(3n + 3) {
+  background: #ffffff;
+}
+
+.market-product-card {
+  background: #ffffff;
+  border: 1px solid var(--core-border);
+  border-radius: 24px;
+  box-shadow: 0 16px 34px rgba(15, 41, 30, 0.05);
+}
+
+.market-product-card:nth-child(3n + 1) .market-product-art,
+.market-product-card:nth-child(3n + 2) .market-product-art,
+.market-product-card:nth-child(3n + 3) .market-product-art {
+  background:
+    radial-gradient(circle at 24px 24px, rgba(0, 191, 165, 0.14), transparent 22%),
+    linear-gradient(135deg, #eef6f2 0%, #dcf0e7 100%);
+}
+
+.market-product-art {
+  border-bottom: 1px solid var(--core-border);
+  min-height: 160px;
+}
+
+.market-product-art span {
+  border: 1px solid var(--core-mint);
+  border-radius: 999px;
+  box-shadow: none;
+  color: var(--core-dark);
+}
+
+.market-product-body h2 {
+  color: var(--core-dark);
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.market-product-body p,
+.market-product-meta > span {
+  color: var(--core-muted);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.market-product-footer strong {
+  font-size: 1.15rem;
+}
+
+@media (max-width: 760px) {
+  .dashboard-sidebar,
+  .role-admin .dashboard-sidebar,
+  .role-seller .dashboard-sidebar,
+  .role-customer .dashboard-sidebar {
+    border-right: 0;
+    border-bottom: 1px solid var(--core-border);
+  }
+}
+
+@media (max-width: 760px) {
+  .role-hero h1 {
+    font-size: 1.55rem;
+  }
+
+  .module-header h1 {
+    font-size: 1.2rem;
+  }
+
+  .metric strong {
+    font-size: 1.35rem;
+  }
+}
+
+/* Align Admin and Seller with the Customer UI style while keeping role content unique. */
+.dashboard-shell.role-admin,
+.dashboard-shell.role-seller,
+.dashboard-shell.role-customer {
+  background:
+    radial-gradient(circle at top right, rgba(0, 191, 165, 0.08), transparent 30%),
+    linear-gradient(180deg, #fbfdfc 0%, #f7fbfa 100%);
+}
+
+.role-admin .dashboard-user,
+.role-seller .dashboard-user,
+.role-customer .dashboard-user {
+  background: #ffffff;
+  border-color: var(--core-border);
+  color: var(--core-dark);
+}
+
+.role-admin .dashboard-user span,
+.role-seller .dashboard-user span,
+.role-customer .dashboard-user span {
+  color: var(--core-muted);
+}
+
+.role-admin .dashboard-tab:hover,
+.role-admin .dashboard-tab.active,
+.role-seller .dashboard-tab:hover,
+.role-seller .dashboard-tab.active,
+.role-customer .dashboard-tab:hover,
+.role-customer .dashboard-tab.active {
+  background: #ffffff;
+  border-color: var(--core-mint);
+  color: var(--core-teal);
+}
+
+.admin-hero,
+.seller-roadmap,
+.customer-hero {
+  background: linear-gradient(135deg, #ffffff 0%, #f4faf7 100%);
+  color: var(--core-dark);
+}
+
+.admin-hero p,
+.seller-roadmap p,
+.customer-hero p {
+  color: var(--core-muted);
+}
+
+.admin-signal-grid div,
+.roadmap-step,
+.customer-quick-card {
+  background: #ffffff;
+  border-color: var(--core-border);
+  color: var(--core-dark);
+}
+
+.role-admin .metric.revenue,
+.role-admin .metric.orders,
+.role-admin .metric.support,
+.role-admin .metric:not(.revenue):not(.orders):not(.support),
+.role-seller .metric.revenue,
+.role-seller .metric.orders,
+.role-seller .metric.support,
+.role-seller .metric:not(.revenue):not(.orders):not(.support),
+.role-customer .metric.revenue,
+.role-customer .metric.orders,
+.role-customer .metric.support,
+.role-customer .metric:not(.revenue):not(.orders):not(.support) {
+  background: #ffffff;
+}
+
+.role-admin .metric span,
+.role-admin .metric strong,
+.role-admin .metric svg,
+.role-seller .metric span,
+.role-seller .metric strong,
+.role-seller .metric svg,
+.role-customer .metric span,
+.role-customer .metric strong,
+.role-customer .metric svg {
+  color: var(--core-dark);
+}
+
+.role-admin .module-header,
+.role-seller .module-header,
+.role-customer .module-header,
+.role-admin .panel,
+.role-seller .panel,
+.role-customer .panel {
+  background: #ffffff;
+  border-color: var(--core-border);
+}
