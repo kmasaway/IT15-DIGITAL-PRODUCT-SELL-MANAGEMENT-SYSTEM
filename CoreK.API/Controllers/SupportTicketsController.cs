@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using CoreK.API.Data;
 using CoreK.API.DTOs;
@@ -8,7 +9,8 @@ namespace CoreK.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class SupportTicketsController : ControllerBase
+    [Authorize]
+    public class SupportTicketsController : CoreKControllerBase
     {
         private readonly AppDbContext _context;
 
@@ -25,7 +27,15 @@ namespace CoreK.API.Controllers
                 .Include(t => t.Order)
                 .AsQueryable();
 
-            if (customerId.HasValue)
+            if (IsCustomer)
+            {
+                query = query.Where(t => t.CustomerId == CurrentUserId);
+            }
+            else if (IsSeller)
+            {
+                query = query.Where(t => t.Product != null && t.Product.SellerId == CurrentUserId);
+            }
+            else if (customerId.HasValue)
             {
                 query = query.Where(t => t.CustomerId == customerId.Value);
             }
@@ -60,6 +70,7 @@ namespace CoreK.API.Controllers
         }
 
         [HttpPost]
+        [Authorize(Roles = "Admin,Seller,Customer")]
         public async Task<IActionResult> CreateTicket([FromBody] CreateSupportTicketDto dto)
         {
             if (dto.ProductId.HasValue)
@@ -76,7 +87,7 @@ namespace CoreK.API.Controllers
 
             var ticket = new SupportTicket
             {
-                CustomerId = dto.CustomerId <= 0 ? 1 : dto.CustomerId,
+                CustomerId = IsAdmin && dto.CustomerId > 0 ? dto.CustomerId : CurrentUserId,
                 ProductId = dto.ProductId,
                 OrderId = dto.OrderId,
                 CustomerName = dto.CustomerName.Trim(),
@@ -94,10 +105,14 @@ namespace CoreK.API.Controllers
         }
 
         [HttpPut("{ticketId}")]
+        [Authorize(Roles = "Admin,Seller")]
         public async Task<IActionResult> UpdateTicket(int ticketId, [FromBody] UpdateSupportTicketDto dto)
         {
-            var ticket = await _context.SupportTickets.FindAsync(ticketId);
+            var ticket = await _context.SupportTickets
+                .Include(t => t.Product)
+                .FirstOrDefaultAsync(t => t.SupportTicketId == ticketId);
             if (ticket == null) return NotFound("Support ticket not found.");
+            if (!IsAdmin && (ticket.Product == null || ticket.Product.SellerId != CurrentUserId)) return Forbid();
 
             ticket.Status = dto.Status.Trim();
             ticket.Priority = dto.Priority.Trim();

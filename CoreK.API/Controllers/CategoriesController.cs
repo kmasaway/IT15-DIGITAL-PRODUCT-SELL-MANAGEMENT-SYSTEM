@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using CoreK.API.Data;
 using CoreK.API.DTOs;
@@ -8,7 +9,8 @@ namespace CoreK.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class CategoriesController : ControllerBase
+    [Authorize]
+    public class CategoriesController : CoreKControllerBase
     {
         private readonly AppDbContext _context;
 
@@ -35,6 +37,7 @@ namespace CoreK.API.Controllers
         }
 
         [HttpPost]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> CreateCategory([FromBody] CreateCategoryDto dto)
         {
             var exists = await _context.Categories.AnyAsync(c => c.CategoryName == dto.CategoryName);
@@ -53,6 +56,7 @@ namespace CoreK.API.Controllers
         }
 
         [HttpPut("{categoryId}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> UpdateCategory(int categoryId, [FromBody] UpdateCategoryDto dto)
         {
             var category = await _context.Categories.FindAsync(categoryId);
@@ -70,6 +74,7 @@ namespace CoreK.API.Controllers
         }
 
         [HttpDelete("{categoryId}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteCategory(int categoryId)
         {
             var category = await _context.Categories.FindAsync(categoryId);

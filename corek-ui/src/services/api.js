@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5132/api';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5132/api';
 
 async function parseResponse(response) {
   const text = await response.text();
@@ -19,18 +19,39 @@ async function parseResponse(response) {
 }
 
 async function request(path, options = {}) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers: {
-      ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
-      ...options.headers,
-    },
-  });
+  const token = localStorage.getItem('sys_auth_token');
+  let response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers: {
+        ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options.headers,
+      },
+    });
+  } catch (error) {
+    throw new Error(
+      error instanceof TypeError
+        ? 'Unable to reach the CoreK API. Start the backend server, then try again.'
+        : error.message
+    );
+  }
 
   return parseResponse(response);
 }
 
 export const api = {
+  register: (payload) => request('/Auth/register', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  login: (payload) => request('/Auth/login', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+
   getProducts: (search = '') => request(`/Product${search ? `?search=${encodeURIComponent(search)}` : ''}`),
   getSellerProducts: (sellerId) => request(`/Product/seller/${sellerId}`),
   uploadProduct: (formData) => request('/Product/upload', { method: 'POST', body: formData }),

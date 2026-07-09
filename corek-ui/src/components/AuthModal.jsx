@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { X, LogIn, UserPlus, Loader2, AlertCircle } from 'lucide-react';
+import { api } from '../services/api';
 
 export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
   const [isRegisterMode, setIsRegisterMode] = useState(false);
@@ -13,10 +14,6 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
     e.preventDefault();
     setIsLoading(true);
     setErrorMessage('');
-
-    const endpoint = isRegisterMode 
-      ? 'http://localhost:5132/api/Auth/register' 
-      : 'http://localhost:5132/api/Auth/login';
 
     // Formulating dual-casing properties to guarantee seamless ASP.NET DTO model binding
     const payload = isRegisterMode 
@@ -40,30 +37,9 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
     console.log("Dispatching authentication API request payload:", payload);
 
     try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const responseText = await response.text();
-      console.log("Raw response stream from API Engine:", response.status, responseText);
-      
-      let data = {};
-      try {
-        data = responseText ? JSON.parse(responseText) : {};
-      } catch (parseError) {
-        // Safe string fallback capture if backend sends a raw message instead of JSON object
-        if (!response.ok) {
-          throw new Error(responseText || `HTTP status code thrown: ${response.status}`, { cause: parseError });
-        }
-      }
-
-      if (!response.ok) {
-        throw new Error(data.message || responseText || (isRegisterMode 
-          ? 'Registration rejected. Please verify submission properties.' 
-          : 'Identity validation failure. Verify credentials.'));
-      }
+      const data = isRegisterMode
+        ? await api.register(payload)
+        : await api.login(payload);
 
       if (isRegisterMode) {
         setErrorMessage(data.message || 'Registration successful! Your account is ready. You can now sign in.');
@@ -146,7 +122,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
                 </div>
               </div>
               <div style={styles.inputGroup}>
-                <label style={styles.label}>Account Role</label>
+                <label style={styles.label}>Account Type</label>
                 <select
                   required
                   disabled={isLoading}
@@ -156,7 +132,6 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
                 >
                   <option value="Customer">Customer</option>
                   <option value="Seller">Seller</option>
-                  <option value="Admin">Admin</option>
                 </select>
               </div>
             </>
@@ -176,7 +151,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
           </div>
 
           <div style={styles.inputGroup}>
-            <label style={styles.label}>Security Phrase (Password)</label>
+            <label style={styles.label}>Password</label>
             <input
               type="password"
               required
@@ -191,7 +166,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
           <button type="submit" style={styles.submitBtn} disabled={isLoading}>
             {isLoading ? (
               <>
-                Processing Pipelines... 
+                {isRegisterMode ? 'Creating Account' : 'Logging In'}
                 <Loader2 size={16} style={{ animation: 'spin 1s linear infinite', marginLeft: '8px' }} />
               </>
             ) : isRegisterMode ? (

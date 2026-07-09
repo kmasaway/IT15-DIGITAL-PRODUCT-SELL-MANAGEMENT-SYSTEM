@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using CoreK.API.Data;
 using CoreK.API.Models;
@@ -8,7 +9,8 @@ namespace CoreK.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class ProductController : ControllerBase
+    [Authorize]
+    public class ProductController : CoreKControllerBase
     {
         private readonly AppDbContext _context;
         private readonly IWebHostEnvironment _environment;
@@ -25,7 +27,12 @@ namespace CoreK.API.Controllers
             var query = _context.Products
                 .Include(p => p.Category)
                 .Include(p => p.Versions)
-                .Where(p => p.IsActive);
+                .AsQueryable();
+
+            if (!IsAdmin)
+            {
+                query = query.Where(p => p.IsActive);
+            }
 
             if (categoryId.HasValue)
             {
@@ -107,8 +114,14 @@ namespace CoreK.API.Controllers
         }
 
         [HttpGet("seller/{sellerId}")]
+        [Authorize(Roles = "Admin,Seller")]
         public async Task<IActionResult> GetSellerProducts(int sellerId)
         {
+            if (!IsSelfOrAdmin(sellerId))
+            {
+                return Forbid();
+            }
+
             var products = await _context.Products
                 .Include(p => p.Category)
                 .Include(p => p.Versions)
@@ -136,6 +149,7 @@ namespace CoreK.API.Controllers
         }
 
         [HttpPost("upload")]
+        [Authorize(Roles = "Admin,Seller")]
         public async Task<IActionResult> UploadProduct([FromForm] CreateProductDto productDto, IFormFile? file)
         {
             if (file == null || file.Length == 0)
@@ -146,11 +160,12 @@ namespace CoreK.API.Controllers
 
             var product = new Product
             {
-                SellerId = productDto.SellerId <= 0 ? 1 : productDto.SellerId,
+                SellerId = IsAdmin && productDto.SellerId > 0 ? productDto.SellerId : CurrentUserId,
                 CategoryId = productDto.CategoryId,
                 Title = productDto.Title,
                 Description = productDto.Description,
-                Price = productDto.Price
+                Price = productDto.Price,
+                IsActive = IsAdmin
             };
 
             _context.Products.Add(product);
@@ -169,14 +184,23 @@ namespace CoreK.API.Controllers
             _context.ProductVersions.Add(initialVersion);
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = "Product and initial version uploaded successfully!", productId = product.ProductId });
+            return Ok(new
+            {
+                message = product.IsActive
+                    ? "Product and initial version uploaded successfully!"
+                    : "Product submitted and waiting for admin validation.",
+                productId = product.ProductId,
+                status = product.IsActive ? "Approved" : "Pending Review"
+            });
         }
 
         [HttpPut("{productId}")]
+        [Authorize(Roles = "Admin,Seller")]
         public async Task<IActionResult> UpdateProduct(int productId, [FromBody] UpdateProductDto productDto)
         {
             var product = await _context.Products.FindAsync(productId);
             if (product == null) return NotFound("Product listing not found.");
+            if (!IsAdmin && product.SellerId != CurrentUserId) return Forbid();
 
             var categoryExists = await _context.Categories.AnyAsync(c => c.CategoryId == productDto.CategoryId);
             if (!categoryExists) return BadRequest("Invalid category specified.");
@@ -193,10 +217,12 @@ namespace CoreK.API.Controllers
         }
 
         [HttpDelete("{productId}")]
+        [Authorize(Roles = "Admin,Seller")]
         public async Task<IActionResult> DeactivateProduct(int productId)
         {
             var product = await _context.Products.FindAsync(productId);
             if (product == null) return NotFound("Product listing not found.");
+            if (!IsAdmin && product.SellerId != CurrentUserId) return Forbid();
 
             product.IsActive = false;
             await _context.SaveChangesAsync();
@@ -205,10 +231,12 @@ namespace CoreK.API.Controllers
         }
 
         [HttpPost("{productId}/add-version")]
+        [Authorize(Roles = "Admin,Seller")]
         public async Task<IActionResult> AddNewVersion(int productId, [FromForm] AddVersionDto versionDto, IFormFile? file)
         {
             var product = await _context.Products.FindAsync(productId);
             if (product == null) return NotFound("Product listing not found.");
+            if (!IsAdmin && product.SellerId != CurrentUserId) return Forbid();
 
             if (file == null || file.Length == 0) return BadRequest("Updated file asset must be provided.");
 

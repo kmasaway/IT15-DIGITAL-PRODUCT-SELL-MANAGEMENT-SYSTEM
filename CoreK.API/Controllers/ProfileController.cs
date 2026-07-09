@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using CoreK.API.Data;
 using CoreK.API.DTOs;
@@ -7,7 +8,8 @@ namespace CoreK.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class ProfileController : ControllerBase
+    [Authorize]
+    public class ProfileController : CoreKControllerBase
     {
         private readonly AppDbContext _context;
 
@@ -19,6 +21,8 @@ namespace CoreK.API.Controllers
         [HttpGet("{userId}")]
         public async Task<IActionResult> GetProfile(int userId)
         {
+            if (!IsSelfOrAdmin(userId)) return Forbid();
+
             var user = await _context.Users.FindAsync(userId);
             if (user == null) return NotFound("User profile not found.");
 
@@ -42,6 +46,8 @@ namespace CoreK.API.Controllers
         [HttpPut("{userId}")]
         public async Task<IActionResult> UpdateProfile(int userId, [FromBody] UpdateProfileDto dto)
         {
+            if (!IsSelfOrAdmin(userId)) return Forbid();
+
             var user = await _context.Users.FindAsync(userId);
             if (user == null) return NotFound("User profile not found.");
 

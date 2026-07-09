@@ -29,30 +29,53 @@ namespace CoreK.API.Controllers
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterDto dto)
         {
+            var requestedRole = dto.Role?.Trim();
+            var safeRole = string.Equals(requestedRole, "Seller", StringComparison.OrdinalIgnoreCase)
+                ? "Seller"
+                : "Customer";
+
             if (await _context.Users.AnyAsync(u => u.Email == dto.Email))
             {
                 return BadRequest("Email is already registered.");
             }
 
             string passwordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password);
-            string verificationCode = Random.Shared.Next(100000, 999999).ToString();
+            var senderEmail = _configuration["EmailSettings:SenderEmail"];
+            var senderPassword = _configuration["EmailSettings:AppPassword"];
+            var isEmailVerificationConfigured =
+                !string.IsNullOrWhiteSpace(senderEmail) &&
+                !string.IsNullOrWhiteSpace(senderPassword);
+            string? verificationCode = isEmailVerificationConfigured
+                ? Random.Shared.Next(100000, 999999).ToString()
+                : null;
 
             var newUser = new User
             {
                 FullName = dto.FullName,
                 Email = dto.Email,
                 PasswordHash = passwordHash,
-                Role = dto.Role,
-                IsEmailVerified = false, 
+                Role = safeRole,
+                IsEmailVerified = !isEmailVerificationConfigured,
                 EmailVerificationToken = verificationCode
             };
 
             _context.Users.Add(newUser);
             await _context.SaveChangesAsync();
 
+            if (!isEmailVerificationConfigured)
+            {
+                Console.WriteLine(">>> EMAIL VERIFICATION SKIPPED: SMTP settings are not configured.");
+                return Ok(new
+                {
+                    message = "Registration successful! Email verification is disabled for this local build. You can now sign in.",
+                    requiresVerification = false,
+                    email = newUser.Email
+                });
+            }
+
             try
             {
-                await _emailSender.SendVerificationCodeAsync(newUser.Email, verificationCode);
+                await _emailSender.SendVerificationCodeAsync(newUser.Email, verificationCode!);
                 Console.WriteLine(">>> SUCCESS: Email verification code sent via SMTP.");
                 return Ok(new { message = "Registration successful! Enter the 6-digit code sent to your email.", requiresVerification = true, email = newUser.Email });
             }
@@ -60,12 +83,15 @@ namespace CoreK.API.Controllers
             {
                 Console.WriteLine($">>> SMTP REGISTER ERROR: {ex.Message}");
 
-                _context.Users.Remove(newUser);
+                newUser.IsEmailVerified = true;
+                newUser.EmailVerificationToken = null;
                 await _context.SaveChangesAsync();
 
-                return StatusCode(500, new
+                return Ok(new
                 {
-                    message = "Registration could not continue because email verification is not configured. Please set EmailSettings:SenderEmail and EmailSettings:AppPassword in the API settings."
+                    message = "Registration successful! Verification email could not be sent, so this local account was verified automatically. You can now sign in.",
+                    requiresVerification = false,
+                    email = newUser.Email
                 });
             }
         }
@@ -187,7 +213,10 @@ namespace CoreK.API.Controllers
             };
 
             var keyStr = _configuration.GetSection("AppSettings:TokenSecret").Value;
-            if (string.IsNullOrEmpty(keyStr)) keyStr = "SuperSecretDefaultKeyThatIsLongEnoughToMeetSecurityRequirements123!";
+            if (string.IsNullOrWhiteSpace(keyStr))
+            {
+                throw new InvalidOperationException("AppSettings:TokenSecret must be configured.");
+            }
             
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(keyStr));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha512Signature);

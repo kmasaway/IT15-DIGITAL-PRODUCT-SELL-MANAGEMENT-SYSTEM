@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using CoreK.API.Data;
 using CoreK.API.DTOs;
@@ -8,7 +9,8 @@ namespace CoreK.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class PaymentsController : ControllerBase
+    [Authorize]
+    public class PaymentsController : CoreKControllerBase
     {
         private readonly AppDbContext _context;
 
@@ -18,6 +20,7 @@ namespace CoreK.API.Controllers
         }
 
         [HttpPost("checkout")]
+        [Authorize(Roles = "Admin,Customer")]
         public async Task<IActionResult> CreateCheckout([FromBody] CreatePaymentDto dto)
         {
             var product = await _context.Products
@@ -30,7 +33,7 @@ namespace CoreK.API.Controllers
             var referenceNumber = $"CK-{DateTime.UtcNow:yyyyMMddHHmmss}-{Random.Shared.Next(1000, 9999)}";
             var order = new Order
             {
-                CustomerId = dto.CustomerId <= 0 ? 1 : dto.CustomerId,
+                CustomerId = IsAdmin && dto.CustomerId > 0 ? dto.CustomerId : CurrentUserId,
                 ProductId = product.ProductId,
                 CustomerName = dto.CustomerName.Trim(),
                 CustomerEmail = dto.CustomerEmail.Trim(),
@@ -68,6 +71,7 @@ namespace CoreK.API.Controllers
         }
 
         [HttpGet("orders")]
+        [Authorize(Roles = "Admin,Seller,Customer")]
         public async Task<IActionResult> GetOrders([FromQuery] int? customerId)
         {
             var query = _context.Orders
@@ -75,7 +79,15 @@ namespace CoreK.API.Controllers
                 .ThenInclude(p => p!.Category)
                 .AsQueryable();
 
-            if (customerId.HasValue)
+            if (IsCustomer)
+            {
+                query = query.Where(o => o.CustomerId == CurrentUserId);
+            }
+            else if (IsSeller)
+            {
+                query = query.Where(o => o.Product != null && o.Product.SellerId == CurrentUserId);
+            }
+            else if (customerId.HasValue)
             {
                 query = query.Where(o => o.CustomerId == customerId.Value);
             }

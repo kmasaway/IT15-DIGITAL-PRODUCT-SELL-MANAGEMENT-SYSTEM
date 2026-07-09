@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using CoreK.API.Data;
 
@@ -6,7 +7,8 @@ namespace CoreK.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class ReportsController : ControllerBase
+    [Authorize(Roles = "Admin,Seller,Customer")]
+    public class ReportsController : CoreKControllerBase
     {
         private readonly AppDbContext _context;
 
@@ -18,18 +20,38 @@ namespace CoreK.API.Controllers
         [HttpGet("summary")]
         public async Task<IActionResult> GetSummary()
         {
-            var totalProducts = await _context.Products.CountAsync();
-            var activeProducts = await _context.Products.CountAsync(p => p.IsActive);
+            var productQuery = _context.Products.AsQueryable();
+            var orderQuery = _context.Orders
+                .Include(o => o.Product)
+                .ThenInclude(p => p!.Category)
+                .AsQueryable();
+            var ticketQuery = _context.SupportTickets
+                .Include(t => t.Product)
+                .AsQueryable();
+
+            if (IsSeller)
+            {
+                productQuery = productQuery.Where(p => p.SellerId == CurrentUserId);
+                orderQuery = orderQuery.Where(o => o.Product != null && o.Product.SellerId == CurrentUserId);
+                ticketQuery = ticketQuery.Where(t => t.Product != null && t.Product.SellerId == CurrentUserId);
+            }
+            else if (IsCustomer)
+            {
+                orderQuery = orderQuery.Where(o => o.CustomerId == CurrentUserId);
+                ticketQuery = ticketQuery.Where(t => t.CustomerId == CurrentUserId);
+            }
+
+            var totalProducts = await productQuery.CountAsync();
+            var activeProducts = await productQuery.CountAsync(p => p.IsActive);
             var totalCategories = await _context.Categories.CountAsync();
-            var totalOrders = await _context.Orders.CountAsync();
-            var completedOrders = await _context.Orders.CountAsync(o => o.Status == "Completed");
-            var totalSales = await _context.Orders
+            var totalOrders = await orderQuery.CountAsync();
+            var completedOrders = await orderQuery.CountAsync(o => o.Status == "Completed");
+            var totalSales = await orderQuery
                 .Where(o => o.Status == "Completed")
                 .SumAsync(o => (decimal?)o.TotalAmount) ?? 0m;
-            var openTickets = await _context.SupportTickets.CountAsync(t => t.Status != "Closed");
+            var openTickets = await ticketQuery.CountAsync(t => t.Status != "Closed");
 
-            var recentOrders = await _context.Orders
-                .Include(o => o.Product)
+            var recentOrders = await orderQuery
                 .OrderByDescending(o => o.CreatedAt)
                 .Take(5)
                 .Select(o => new
@@ -44,10 +66,8 @@ namespace CoreK.API.Controllers
                 })
                 .ToListAsync();
 
-            var salesByCategory = await _context.Orders
+            var salesByCategory = await orderQuery
                 .Where(o => o.Status == "Completed")
-                .Include(o => o.Product)
-                .ThenInclude(p => p!.Category)
                 .GroupBy(o => o.Product == null || o.Product.Category == null
                     ? "Digital Product"
                     : o.Product.Category.CategoryName)
@@ -60,9 +80,8 @@ namespace CoreK.API.Controllers
                 .OrderByDescending(g => g.Sales)
                 .ToListAsync();
 
-            var topProducts = await _context.Orders
+            var topProducts = await orderQuery
                 .Where(o => o.Status == "Completed")
-                .Include(o => o.Product)
                 .GroupBy(o => new
                 {
                     o.ProductId,
