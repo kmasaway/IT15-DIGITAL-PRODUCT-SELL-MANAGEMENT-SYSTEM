@@ -37,7 +37,6 @@ namespace CoreK.API.Controllers
                 user.PayoutMethod,
                 user.PayoutAccountName,
                 user.PayoutAccountNumber,
-                user.IsTwoFactorEnabled,
                 user.IsEmailVerified,
                 user.CreatedAt
             });
@@ -62,7 +61,8 @@ namespace CoreK.API.Controllers
             user.PayoutMethod = dto.PayoutMethod?.Trim();
             user.PayoutAccountName = dto.PayoutAccountName?.Trim();
             user.PayoutAccountNumber = dto.PayoutAccountNumber?.Trim();
-            user.IsTwoFactorEnabled = dto.IsTwoFactorEnabled;
+            user.IsTwoFactorEnabled = false;
+            user.TwoFactorSecret = null;
 
             await _context.SaveChangesAsync();
 
@@ -79,8 +79,7 @@ namespace CoreK.API.Controllers
                     user.Bio,
                     user.PayoutMethod,
                     user.PayoutAccountName,
-                    user.PayoutAccountNumber,
-                    user.IsTwoFactorEnabled
+                    user.PayoutAccountNumber
                 }
             });
         }

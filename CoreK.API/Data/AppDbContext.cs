@@ -15,6 +15,7 @@ namespace CoreK.API.Data
         public DbSet<ProductVersion> ProductVersions { get; set; }
         public DbSet<Order> Orders { get; set; }
         public DbSet<SupportTicket> SupportTickets { get; set; }
+        public DbSet<ChatMessage> ChatMessages { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -37,6 +38,15 @@ namespace CoreK.API.Data
                 .WithMany()
                 .HasForeignKey(t => t.OrderId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<ChatMessage>()
+                .HasOne(m => m.Product)
+                .WithMany()
+                .HasForeignKey(m => m.ProductId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<ChatMessage>()
+                .HasIndex(m => new { m.SellerId, m.CustomerId, m.CreatedAt });
         }
     }
 }

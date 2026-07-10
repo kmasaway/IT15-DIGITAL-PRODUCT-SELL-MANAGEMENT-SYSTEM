@@ -86,6 +86,15 @@ export const api = {
 
   getUsers: () => request('/Users'),
 
+  getChatThreads: () => request('/Chat/threads'),
+  getChatMessages: (sellerId, customerId) => request(
+    `/Chat/messages?sellerId=${encodeURIComponent(sellerId)}&customerId=${encodeURIComponent(customerId)}`
+  ),
+  sendChatMessage: (payload) => request('/Chat/messages', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+
   getTickets: (customerId) => request(`/SupportTickets${customerId ? `?customerId=${customerId}` : ''}`),
   createTicket: (payload) => request('/SupportTickets', { method: 'POST', body: JSON.stringify(payload) }),
   updateTicket: (ticketId, payload) => request(`/SupportTickets/${ticketId}`, {

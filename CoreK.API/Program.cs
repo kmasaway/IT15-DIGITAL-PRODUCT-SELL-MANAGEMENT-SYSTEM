@@ -109,7 +109,6 @@ static void SeedAdminAccount(AppDbContext db, IConfiguration configuration)
         Role = "Admin",
         IsEmailVerified = true,
         EmailVerificationToken = null,
-        IsTwoFactorEnabled = false,
         CreatedAt = DateTime.UtcNow
     };
 

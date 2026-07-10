@@ -29,7 +29,6 @@ namespace CoreK.API.Controllers
                     u.Email,
                     u.Role,
                     u.IsEmailVerified,
-                    u.IsTwoFactorEnabled,
                     u.CreatedAt,
                     ProductCount = _context.Products.Count(p => p.SellerId == u.UserId),
                     OrderCount = _context.Orders.Count(o => o.CustomerId == u.UserId),

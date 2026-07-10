@@ -27,6 +27,5 @@ namespace CoreK.API.DTOs
         [StringLength(80)]
         public string? PayoutAccountNumber { get; set; }
 
-        public bool IsTwoFactorEnabled { get; set; }
     }
 }

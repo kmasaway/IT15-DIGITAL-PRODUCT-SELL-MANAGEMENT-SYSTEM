@@ -10,31 +10,39 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
 
   if (!isOpen) return null;
 
+  const isNoticeMessage =
+    errorMessage.includes('successful') ||
+    errorMessage.includes('sent') ||
+    errorMessage.includes('ready');
+
+  const handleClose = () => {
+    setErrorMessage('');
+    onClose();
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
     setErrorMessage('');
 
-    // Formulating dual-casing properties to guarantee seamless ASP.NET DTO model binding
-    const payload = isRegisterMode 
-      ? { 
-          FullName: `${fields.firstName} ${fields.lastName}`.trim(),
-          fullName: `${fields.firstName} ${fields.lastName}`.trim(), 
+    const fullName = `${fields.firstName} ${fields.lastName}`.trim();
+    const payload = isRegisterMode
+      ? {
+          FullName: fullName,
+          fullName,
           Email: fields.email,
-          email: fields.email, 
+          email: fields.email,
           Password: fields.password,
           password: fields.password,
           Role: fields.role,
           role: fields.role
         }
-      : { 
+      : {
           Email: fields.email,
-          email: fields.email, 
+          email: fields.email,
           Password: fields.password,
-          password: fields.password 
+          password: fields.password
         };
-
-    console.log("Dispatching authentication API request payload:", payload);
 
     try {
       const data = isRegisterMode
@@ -43,22 +51,22 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
 
       if (isRegisterMode) {
         setErrorMessage(data.message || 'Registration successful! Your account is ready. You can now sign in.');
-        // Reset local credential input values safely
         setFields({ firstName: '', lastName: '', email: '', password: '', role: 'Customer' });
         setIsRegisterMode(false);
-      } else {
-        if (data.token) {
-          localStorage.setItem('sys_auth_token', data.token);
-          console.log("Token signature locked into persistent local cache storage.");
-        }
-        
-        if (typeof onAuthSuccess === 'function') {
-          onAuthSuccess(data.user);
-        }
-        onClose();
+        return;
       }
+
+      if (data.token) {
+        localStorage.setItem('sys_auth_token', data.token);
+      }
+
+      if (typeof onAuthSuccess === 'function') {
+        onAuthSuccess(data.user);
+      }
+
+      handleClose();
     } catch (err) {
-      console.error("Authentication Exception Trace:", err);
+      console.error('Authentication Exception Trace:', err);
       setErrorMessage(err.message || 'Network interface connectivity interruption.');
     } finally {
       setIsLoading(false);
@@ -68,23 +76,22 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
   return (
     <div style={styles.overlay}>
       <div style={styles.modalCard}>
-        
         <div style={styles.header}>
           <h3 style={styles.title}>
             {isRegisterMode ? 'Create Account' : 'Login to CoreK'}
           </h3>
-          <button style={styles.closeBtn} onClick={onClose} disabled={isLoading}>
+          <button style={styles.closeBtn} onClick={handleClose} disabled={isLoading}>
             <X size={18} />
           </button>
         </div>
 
         {errorMessage && (
-          <div 
+          <div
             style={{
-              ...styles.errorBanner, 
-              backgroundColor: errorMessage.includes('successful') || errorMessage.includes('pushed') ? '#eef6f2' : '#fff5f5',
-              borderColor: errorMessage.includes('successful') || errorMessage.includes('pushed') ? '#bfe0d3' : '#ffcccc',
-              color: errorMessage.includes('successful') || errorMessage.includes('pushed') ? '#0f291e' : '#c92a2a'
+              ...styles.errorBanner,
+              backgroundColor: isNoticeMessage ? '#eef6f2' : '#fff5f5',
+              borderColor: isNoticeMessage ? '#bfe0d3' : '#ffcccc',
+              color: isNoticeMessage ? '#0f291e' : '#c92a2a'
             }}
           >
             <AlertCircle size={16} />
@@ -156,7 +163,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
               type="password"
               required
               disabled={isLoading}
-              placeholder="••••••••••••"
+              placeholder="Password"
               style={styles.input}
               value={fields.password}
               onChange={(e) => setFields({ ...fields, password: e.target.value })}
@@ -184,10 +191,10 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
         <div style={styles.footer}>
           <span style={styles.footerText}>
             {isRegisterMode ? 'Already have an account? ' : 'New to CoreK? '}
-            <strong 
-              style={styles.toggleLink} 
+            <strong
+              style={styles.toggleLink}
               onClick={() => {
-                if(!isLoading) {
+                if (!isLoading) {
                   setIsRegisterMode(!isRegisterMode);
                   setErrorMessage('');
                 }
@@ -197,7 +204,6 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
             </strong>
           </span>
         </div>
-
       </div>
     </div>
   );
@@ -207,7 +213,7 @@ const styles = {
   overlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(15, 41, 30, 0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
   modalCard: { backgroundColor: '#ffffff', border: '1px solid #bfe0d3', borderRadius: '24px', width: '100%', maxWidth: '460px', padding: '2.5rem', boxShadow: '0 30px 70px rgba(0, 44, 28, 0.15)', boxSizing: 'border-box' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' },
-  title: { fontSize: '1.35rem', fontWeight: '800', color: '#0f291e', margin: 0, letterSpacing: '-0.3px' },
+  title: { fontSize: '1.35rem', fontWeight: '800', color: '#0f291e', margin: 0, letterSpacing: 0 },
   closeBtn: { border: 'none', backgroundColor: 'transparent', color: '#7ea191', cursor: 'pointer' },
   errorBanner: { display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid #ffcccc', borderRadius: '12px', padding: '0.75rem 1rem', fontSize: '0.85rem', marginBottom: '1.25rem', fontWeight: '500', lineHeight: '1.4' },
   form: { display: 'flex', flexDirection: 'column', gap: '1.2rem' },

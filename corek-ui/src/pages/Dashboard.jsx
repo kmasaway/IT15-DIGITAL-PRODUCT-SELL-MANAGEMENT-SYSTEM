@@ -32,7 +32,15 @@ import './Dashboard.css';
 
 const MARKETPLACE_PAGE_SIZE = 6;
 const VALID_ID_STORAGE_PREFIX = 'corek_valid_id_';
-const CHAT_STORAGE_PREFIX = 'corek_chat_';
+const SELLER_STATIC_SALES_GRAPH = [
+  { label: 'Jan', sales: 12500, color: '#00bfa5' },
+  { label: 'Feb', sales: 18600, color: '#4f7cff' },
+  { label: 'Mar', sales: 14200, color: '#f0a94b' },
+  { label: 'Apr', sales: 23400, color: '#00bfa5' },
+  { label: 'May', sales: 19800, color: '#4f7cff' },
+  { label: 'Jun', sales: 27600, color: '#f0a94b' },
+];
+const SELLER_STATIC_SALES_GRAPH_MAX = Math.max(...SELLER_STATIC_SALES_GRAPH.map((point) => point.sales));
 
 const emptyProductForm = {
   productId: null,
@@ -41,7 +49,6 @@ const emptyProductForm = {
   price: '',
   categoryId: '',
   isActive: true,
-  iconFile: null,
   coverPhotoFile: null,
 };
 
@@ -91,7 +98,7 @@ const roleConfigs = {
   },
   Seller: {
     className: 'role-seller',
-    modules: ['overview', 'products', 'reports', 'payments', 'support', 'profile'],
+    modules: ['overview', 'products', 'payments', 'reports', 'support', 'profile'],
     moduleLabels: { products: 'Listings', payments: 'Payouts' },
   },
   Customer: {
@@ -179,6 +186,10 @@ function escapeHtml(value) {
   })[character]);
 }
 
+function isImageFile(file) {
+  return Boolean(file?.type?.startsWith('image/'));
+}
+
 function DashboardModal({ title, subtitle, children, onClose, size = 'regular' }) {
   return (
     <div className="dashboard-modal-backdrop" role="presentation">
@@ -232,7 +243,6 @@ export default function Dashboard({ user, userSessionName }) {
     payoutMethod: 'GCash',
     payoutAccountName: displayName,
     payoutAccountNumber: '',
-    isTwoFactorEnabled: false,
   });
   const [productForm, setProductForm] = useState(emptyProductForm);
   const [versionForm, setVersionForm] = useState(emptyVersionForm);
@@ -264,32 +274,15 @@ export default function Dashboard({ user, userSessionName }) {
     start: '',
     end: '',
   });
+  const [sellerAnalyticsTab, setSellerAnalyticsTab] = useState('topProducts');
+  const [productReviewRemarks, setProductReviewRemarks] = useState({});
   const [payoutRequest, setPayoutRequest] = useState(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatDraft, setChatDraft] = useState('');
-  const [chatMessages, setChatMessages] = useState(() => {
-    const storageKey = `${CHAT_STORAGE_PREFIX}${userId}_${normalizedRole}`;
-
-    try {
-      const savedMessages = JSON.parse(localStorage.getItem(storageKey) || 'null');
-      if (Array.isArray(savedMessages) && savedMessages.length > 0) {
-        return savedMessages;
-      }
-    } catch {
-      // Keep the built-in starter messages if local storage is unavailable.
-    }
-
-    return [
-      {
-        id: 1,
-        sender: normalizedRole === 'Seller' ? 'Customer Support' : 'CoreK Seller',
-        text: normalizedRole === 'Seller'
-          ? 'Hi seller, you can reply to buyer concerns here.'
-          : 'Hi, send a question about a product or your order here.',
-        createdAt: new Date().toISOString(),
-      },
-    ];
-  });
+  const [chatThreads, setChatThreads] = useState([]);
+  const [activeChatThreadId, setActiveChatThreadId] = useState('');
+  const [chatMessages, setChatMessages] = useState([]);
+  const [isChatLoading, setIsChatLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [marketplaceCategory, setMarketplaceCategory] = useState('all');
   const [marketplaceSort, setMarketplaceSort] = useState('featured');
@@ -297,10 +290,23 @@ export default function Dashboard({ user, userSessionName }) {
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [, setIsLoading] = useState(false);
+  const productImagePreviewUrl = useMemo(
+    () => (isImageFile(productForm.coverPhotoFile) ? URL.createObjectURL(productForm.coverPhotoFile) : ''),
+    [productForm.coverPhotoFile]
+  );
+  const versionFilePreviewUrl = useMemo(
+    () => (isImageFile(versionForm.file) ? URL.createObjectURL(versionForm.file) : ''),
+    [versionForm.file]
+  );
 
   const selectedCheckoutProduct = useMemo(
     () => products.find((product) => String(product.productId) === String(checkoutForm.productId)),
     [checkoutForm.productId, products]
+  );
+
+  const activeChatThread = useMemo(
+    () => chatThreads.find((thread) => thread.threadId === activeChatThreadId) || null,
+    [activeChatThreadId, chatThreads]
   );
 
   const roleProducts = useMemo(() => {
@@ -504,7 +510,6 @@ export default function Dashboard({ user, userSessionName }) {
         payoutMethod: profileData.payoutMethod || 'GCash',
         payoutAccountName: profileData.payoutAccountName || profileData.fullName || displayName,
         payoutAccountNumber: profileData.payoutAccountNumber || '',
-        isTwoFactorEnabled: Boolean(profileData.isTwoFactorEnabled),
       });
     } catch (err) {
       setError(err.message || 'Unable to load module data.');
@@ -524,11 +529,66 @@ export default function Dashboard({ user, userSessionName }) {
   useEffect(() => {
     if (!isSeller && !isCustomer) return;
 
-    localStorage.setItem(
-      `${CHAT_STORAGE_PREFIX}${userId}_${normalizedRole}`,
-      JSON.stringify(chatMessages)
-    );
-  }, [chatMessages, isCustomer, isSeller, normalizedRole, userId]);
+    let isCancelled = false;
+
+    api.getChatThreads()
+      .then((threads) => {
+        if (isCancelled) return;
+
+        const nextThreads = threads || [];
+        setChatThreads(nextThreads);
+        setActiveChatThreadId((currentThreadId) => (
+          nextThreads.some((thread) => thread.threadId === currentThreadId)
+            ? currentThreadId
+            : nextThreads[0]?.threadId || ''
+        ));
+      })
+      .catch(() => {
+        if (isCancelled) return;
+        setChatThreads([]);
+        setActiveChatThreadId('');
+        setChatMessages([]);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isCustomer, isSeller, userId]);
+
+  useEffect(() => {
+    if (!activeChatThread) {
+      setChatMessages([]);
+      return;
+    }
+
+    let isCancelled = false;
+    setIsChatLoading(true);
+
+    api.getChatMessages(activeChatThread.sellerId, activeChatThread.customerId)
+      .then((messages) => {
+        if (isCancelled) return;
+        setChatMessages(messages || []);
+      })
+      .catch(() => {
+        if (isCancelled) return;
+        setChatMessages([]);
+      })
+      .finally(() => {
+        if (!isCancelled) setIsChatLoading(false);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeChatThread]);
+
+  useEffect(() => () => {
+    if (productImagePreviewUrl) URL.revokeObjectURL(productImagePreviewUrl);
+  }, [productImagePreviewUrl]);
+
+  useEffect(() => () => {
+    if (versionFilePreviewUrl) URL.revokeObjectURL(versionFilePreviewUrl);
+  }, [versionFilePreviewUrl]);
 
   const showNotice = (message) => {
     setNotice(message);
@@ -569,22 +629,34 @@ export default function Dashboard({ user, userSessionName }) {
     showNotice('Payout request submitted for admin processing.');
   };
 
-  const handleSendChatMessage = (event) => {
+  const handleSendChatMessage = async (event) => {
     event.preventDefault();
 
     const message = chatDraft.trim();
     if (!message) return;
+    if (!activeChatThread) {
+      showError('No buyer or seller conversation is available yet.');
+      return;
+    }
 
-    setChatMessages((currentMessages) => [
-      ...currentMessages,
-      {
-        id: Date.now(),
-        sender: displayName,
-        text: message,
-        createdAt: new Date().toISOString(),
-      },
-    ]);
-    setChatDraft('');
+    try {
+      const savedMessage = await api.sendChatMessage({
+        sellerId: activeChatThread.sellerId,
+        customerId: activeChatThread.customerId,
+        productId: activeChatThread.productId,
+        message,
+      });
+
+      setChatMessages((currentMessages) => [...currentMessages, savedMessage]);
+      setChatDraft('');
+      setChatThreads((currentThreads) => currentThreads.map((thread) => (
+        thread.threadId === activeChatThread.threadId
+          ? { ...thread, lastMessage: savedMessage.text, lastMessageAt: savedMessage.createdAt }
+          : thread
+      )));
+    } catch (err) {
+      showError(err.message);
+    }
   };
 
   const handleApproveProduct = async (product) => {
@@ -603,6 +675,29 @@ export default function Dashboard({ user, userSessionName }) {
     }
   };
 
+  const handleRejectProduct = async (product) => {
+    const remarks = window.prompt('Add rejection remarks');
+    if (remarks === null) return;
+
+    const trimmedRemarks = remarks.trim();
+    if (!trimmedRemarks) {
+      showError('Rejection remarks are required.');
+      return;
+    }
+
+    try {
+      await api.deactivateProduct(product.productId);
+      setProductReviewRemarks((current) => ({
+        ...current,
+        [product.productId]: trimmedRemarks,
+      }));
+      showNotice('Product rejected with remarks.');
+      await loadDashboard();
+    } catch (err) {
+      showError(err.message);
+    }
+  };
+
   const openProductDetailsModal = (product = null) => {
     if (product) {
       setProductForm({
@@ -612,7 +707,6 @@ export default function Dashboard({ user, userSessionName }) {
         price: product.price,
         categoryId: product.categoryId,
         isActive: product.isActive,
-        iconFile: null,
         coverPhotoFile: null,
       });
     } else {
@@ -696,11 +790,15 @@ export default function Dashboard({ user, userSessionName }) {
     );
   };
 
-  const renderSellerDateFilter = (title = 'Date Filter') => {
+  const renderSellerDateFilter = (title = 'Date Filter', options = {}) => {
     if (!isSeller) return null;
 
+    const className = options.plain
+      ? 'seller-date-filter seller-dashboard-section'
+      : 'panel seller-date-filter';
+
     return (
-      <div className="panel seller-date-filter">
+      <div className={className}>
         <div>
           <h2>{title}</h2>
           <p>{formatDateRange(sellerDateFilters)}</p>
@@ -731,6 +829,84 @@ export default function Dashboard({ user, userSessionName }) {
           </button>
         </div>
       </div>
+    );
+  };
+
+  const renderStaticSalesGraph = () => (
+    <section className="panel seller-sales-graph" aria-labelledby="seller-sales-graph-title">
+      <div className="panel-title-row">
+        <div>
+          <h2 id="seller-sales-graph-title">Sales Graph</h2>
+          <p>Monthly sales trend</p>
+        </div>
+        <BarChart3 size={20} />
+      </div>
+
+      <div className="static-sales-chart" role="img" aria-label="Static monthly sales graph">
+        {SELLER_STATIC_SALES_GRAPH.map((point) => {
+          const height = Math.max(10, Math.round((point.sales / SELLER_STATIC_SALES_GRAPH_MAX) * 100));
+
+          return (
+            <div className="static-sales-column" key={point.label}>
+              <strong>{formatMoney(point.sales)}</strong>
+              <span
+                className="static-sales-bar"
+                style={{
+                  '--sales-bar-height': `${height}%`,
+                  '--sales-bar-color': point.color,
+                }}
+              />
+              <small>{point.label}</small>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+
+  const renderSellerRecentOrdersTable = () => {
+    const recentOrders = dateFilteredRoleOrders.slice(0, 5);
+
+    return (
+      <section className="seller-dashboard-section seller-recent-orders">
+        <h2>Recent Orders</h2>
+
+        <div className="table-wrap">
+          <table className="data-table seller-recent-orders-table">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Customer</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th className="number-cell">Amount</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {recentOrders.map((order) => (
+                <tr key={order.orderId}>
+                  <td>
+                    <strong>{order.productTitle || order.title}</strong>
+                  </td>
+                  <td>{order.customerName || 'Customer'}</td>
+                  <td>{formatDate(order.createdAt)}</td>
+                  <td>{renderStatus(order.status || 'Pending')}</td>
+                  <td className="number-cell">{formatMoney(order.totalAmount)}</td>
+                </tr>
+              ))}
+
+              {recentOrders.length === 0 && (
+                <tr>
+                  <td colSpan="5">
+                    <div className="empty-state">No orders recorded yet.</div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
     );
   };
 
@@ -834,8 +1010,8 @@ export default function Dashboard({ user, userSessionName }) {
         });
         showNotice('Product listing updated.');
       } else {
-        if (!productForm.iconFile || !productForm.coverPhotoFile) {
-          showError('Attach both an icon and cover photo before saving.');
+        if (!productForm.coverPhotoFile) {
+          showError('Attach an image before sending the request.');
           return;
         }
 
@@ -846,12 +1022,11 @@ export default function Dashboard({ user, userSessionName }) {
         formData.append('categoryId', productForm.categoryId);
         formData.append('sellerId', userId);
         formData.append('file', productForm.coverPhotoFile);
-        formData.append('icon', productForm.iconFile);
         formData.append('coverPhoto', productForm.coverPhotoFile);
 
         await api.uploadProduct(formData);
         showNotice(isSeller
-          ? 'Product submitted for admin validation.'
+          ? 'Request to sell submitted for admin validation.'
           : 'Product uploaded with initial version.');
       }
 
@@ -1000,9 +1175,30 @@ export default function Dashboard({ user, userSessionName }) {
     return <span className={`status-pill ${tone}`}>{status}</span>;
   };
 
+  const renderTextStatus = (status) => {
+    const normalized = String(status || '').toLowerCase();
+    const tone = normalized.includes('complete')
+      || normalized.includes('active')
+      || normalized.includes('approved')
+      || normalized.includes('verified')
+      || normalized.includes('ready')
+      ? 'good'
+      : normalized.includes('pending') || normalized.includes('open') || normalized.includes('review')
+        ? 'warn'
+        : normalized.includes('reject') || normalized.includes('closed') || normalized.includes('failed') || normalized.includes('missing')
+          ? 'bad'
+          : '';
+
+    return <span className={`status-text ${tone}`}>{status}</span>;
+  };
+
   const renderOverview = () => (
     <div className="module-stack">
-      <div className="grid-4">
+      <div
+        className={`grid-4 ${isAdmin ? 'admin-overview-metrics admin-metric-row' : ''} ${
+          isSeller ? 'seller-overview-metrics' : ''
+        } ${isCustomer ? 'customer-overview-metrics' : ''}`}
+      >
         <div className="panel metric revenue">
           <div>
             <span>{isCustomer ? 'Library Spend' : 'Total Sales'}</span>
@@ -1021,7 +1217,7 @@ export default function Dashboard({ user, userSessionName }) {
 
         <div className="panel metric">
           <div>
-            <span>{isCustomer ? 'Available Assets' : isSeller ? 'Your Listings' : 'Active Products'}</span>
+            <span>{isCustomer ? 'Available Assets' : isSeller ? 'Listing' : 'Active Products'}</span>
             <strong className="number-value">
               {isSeller ? roleProducts.length : reports?.activeProducts || products.length}
             </strong>
@@ -1054,37 +1250,58 @@ export default function Dashboard({ user, userSessionName }) {
 
       {isSeller && (
         <>
-          {renderSellerDateFilter('Dashboard Date Filter')}
+          {renderSellerDateFilter('Dashboard Date Filter', { plain: true })}
 
-          <div className="grid-2 seller-analytics-grid">
-            <div className="panel chart-panel">
-              <div className="panel-title-row">
-                <div>
-                  <h2>Top 5 Best Sell</h2>
-                  <p>Your highest-selling listings by completed orders.</p>
-                </div>
-                <BarChart3 size={20} />
+          <div className="seller-dashboard-main-grid">
+            {renderStaticSalesGraph()}
+
+            <section className="panel chart-panel seller-tabbed-analytics">
+              <div className="seller-analytics-tabs" role="tablist" aria-label="Seller analytics">
+                <button
+                  className={sellerAnalyticsTab === 'topProducts' ? 'active' : ''}
+                  type="button"
+                  role="tab"
+                  aria-selected={sellerAnalyticsTab === 'topProducts'}
+                  onClick={() => setSellerAnalyticsTab('topProducts')}
+                >
+                  Top 5 Best Sell
+                </button>
+
+                <button
+                  className={sellerAnalyticsTab === 'categorySales' ? 'active' : ''}
+                  type="button"
+                  role="tab"
+                  aria-selected={sellerAnalyticsTab === 'categorySales'}
+                  onClick={() => setSellerAnalyticsTab('categorySales')}
+                >
+                  Category Sales
+                </button>
               </div>
 
-              {renderHorizontalChart(sellerTopProducts, 'sales', 'title', formatMoney)}
-            </div>
-
-            <div className="panel chart-panel">
               <div className="panel-title-row">
                 <div>
-                  <h2>Category Sales</h2>
-                  <p>Revenue grouped by digital product category.</p>
+                  <h2>{sellerAnalyticsTab === 'topProducts' ? 'Top 5 Best Sell' : 'Category Sales'}</h2>
+                  <p>
+                    {sellerAnalyticsTab === 'topProducts'
+                      ? 'Your highest-selling listings by completed orders.'
+                      : 'Revenue grouped by digital product category.'}
+                  </p>
                 </div>
-                <Layers size={20} />
+                {sellerAnalyticsTab === 'topProducts' ? <BarChart3 size={20} /> : <Layers size={20} />}
               </div>
 
-              {renderHorizontalChart(sellerSalesByCategory, 'sales', 'category', formatMoney)}
-            </div>
+              {sellerAnalyticsTab === 'topProducts'
+                ? renderHorizontalChart(sellerTopProducts, 'sales', 'title', formatMoney)
+                : renderHorizontalChart(sellerSalesByCategory, 'sales', 'category', formatMoney)}
+            </section>
           </div>
         </>
       )}
 
-      <div className="grid-2">
+      {isSeller ? (
+        renderSellerRecentOrdersTable()
+      ) : (
+        <div className="grid-2">
         <div className="panel">
           <h2>{isCustomer ? 'Recent Purchases' : 'Recent Orders'}</h2>
 
@@ -1111,11 +1328,11 @@ export default function Dashboard({ user, userSessionName }) {
           <h2>Top Categories</h2>
 
           <div className="mini-list">
-            {(isSeller ? sellerSalesByCategory : reports?.salesByCategory || []).length === 0 && (
+            {(reports?.salesByCategory || []).length === 0 && (
               <div className="empty-state">No category sales yet.</div>
             )}
 
-            {(isSeller ? sellerSalesByCategory : reports?.salesByCategory || []).map((item) => (
+            {(reports?.salesByCategory || []).map((item) => (
               <div className="mini-row" key={item.category}>
                 <div>
                   <strong>{item.category}</strong>
@@ -1126,7 +1343,8 @@ export default function Dashboard({ user, userSessionName }) {
             ))}
           </div>
         </div>
-      </div>
+        </div>
+      )}
     </div>
   );
 
@@ -1315,19 +1533,9 @@ export default function Dashboard({ user, userSessionName }) {
 
             <div className="field full">
               <label>Digital Content</label>
-              <div className="content-upload-grid">
+              <div className="content-upload-grid single">
                 <label>
-                  <span>Icon</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    disabled={Boolean(productForm.productId)}
-                    onChange={(e) => setProductForm({ ...productForm, iconFile: e.target.files?.[0] || null })}
-                  />
-                </label>
-
-                <label>
-                  <span>Cover Photo</span>
+                  <span>Image</span>
                   <input
                     type="file"
                     accept="image/*"
@@ -1336,6 +1544,16 @@ export default function Dashboard({ user, userSessionName }) {
                   />
                 </label>
               </div>
+              {productForm.coverPhotoFile && (
+                <div className="upload-preview">
+                  {productImagePreviewUrl ? (
+                    <img src={productImagePreviewUrl} alt="Selected product image preview" />
+                  ) : (
+                    <div className="upload-preview-file">{productForm.coverPhotoFile.name}</div>
+                  )}
+                  <span>{productForm.coverPhotoFile.name}</span>
+                </div>
+              )}
               {productForm.productId && (
                 <span className="field-note">Digital content media is locked while editing listing details.</span>
               )}
@@ -1353,7 +1571,7 @@ export default function Dashboard({ user, userSessionName }) {
 
           <div className="toolbar modal-actions">
             <button className="button" type="submit">
-              Save Product
+              {productForm.productId ? 'Save Product' : 'Request to Sell'}
               <Save size={16} />
             </button>
 
@@ -1405,12 +1623,22 @@ export default function Dashboard({ user, userSessionName }) {
                 type="file"
                 onChange={(e) => setVersionForm({ ...versionForm, file: e.target.files?.[0] || null })}
               />
+              {versionForm.file && (
+                <div className="upload-preview">
+                  {versionFilePreviewUrl ? (
+                    <img src={versionFilePreviewUrl} alt="Selected version file preview" />
+                  ) : (
+                    <div className="upload-preview-file">{versionForm.file.name}</div>
+                  )}
+                  <span>{versionForm.file.name}</span>
+                </div>
+              )}
             </div>
           </div>
 
           <div className="toolbar modal-actions">
             <button className="button" type="submit">
-              Push Version
+              Request to Update
               <UploadCloud size={16} />
             </button>
 
@@ -1444,7 +1672,7 @@ export default function Dashboard({ user, userSessionName }) {
               </button>
 
               <button className="button secondary" type="button" onClick={() => openVersionModal()}>
-                Push Version
+                Product Version
                 <UploadCloud size={16} />
               </button>
             </div>
@@ -1477,29 +1705,63 @@ export default function Dashboard({ user, userSessionName }) {
               </thead>
 
               <tbody>
-                {roleProducts.map((product) => (
+                {roleProducts.map((product) => {
+                  const adminRemarks = productReviewRemarks[product.productId];
+                  const productStatus = isAdmin
+                    ? adminRemarks
+                      ? 'Reject'
+                      : product.isActive
+                        ? 'Approved'
+                        : 'Pending'
+                    : getProductApprovalStatus(product);
+
+                  return (
                   <tr key={product.productId}>
                     <td>
                       <strong>{product.title}</strong>
+                      {adminRemarks && <span className="table-note">Remarks: {adminRemarks}</span>}
                     </td>
                     <td>{product.category || product.categoryName}</td>
                     <td className="money-cell">{formatMoney(product.price)}</td>
                     <td className="number-cell">
                       {product.latestVersion || '1.0.0'} · {product.versionCount || 0} files
                     </td>
-                    <td>{renderStatus(getProductApprovalStatus(product))}</td>
+                    <td>{isAdmin ? renderTextStatus(productStatus) : renderStatus(productStatus)}</td>
 
                     <td className="actions">
                       {isAdmin ? (
-                        <button
-                          className="button secondary"
-                          type="button"
-                          disabled={product.isActive}
-                          onClick={() => handleApproveProduct(product)}
-                        >
-                          {product.isActive ? 'Approved' : 'Approve'}
-                          <ShieldCheck size={14} />
-                        </button>
+                        <>
+                          <button
+                            className="button secondary icon-only-button"
+                            type="button"
+                            disabled={product.isActive}
+                            aria-label={`Approve ${product.title}`}
+                            title="Approve"
+                            onClick={() => handleApproveProduct(product)}
+                          >
+                            <ShieldCheck size={14} />
+                          </button>
+
+                          <button
+                            className="button secondary icon-only-button"
+                            type="button"
+                            aria-label={`Reject ${product.title}`}
+                            title="Reject"
+                            onClick={() => handleRejectProduct(product)}
+                          >
+                            <X size={14} />
+                          </button>
+
+                          <button
+                            className="button secondary icon-only-button"
+                            type="button"
+                            aria-label={`View ${product.title}`}
+                            title="View"
+                            onClick={() => openProductDetailsModal(product)}
+                          >
+                            <Eye size={14} />
+                          </button>
+                        </>
                       ) : (
                         <>
                         <button
@@ -1524,7 +1786,8 @@ export default function Dashboard({ user, userSessionName }) {
                       )}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
 
                 {roleProducts.length === 0 && (
                   <tr>
@@ -1792,7 +2055,7 @@ export default function Dashboard({ user, userSessionName }) {
                     {order.referenceNumber || 'No reference'} · {order.paymentMethod}
                   </span>
                 </div>
-                {renderStatus(order.status)}
+                {isAdmin || isCustomer ? renderTextStatus(order.status) : renderStatus(order.status)}
               </div>
             ))}
 
@@ -1842,7 +2105,7 @@ export default function Dashboard({ user, userSessionName }) {
                   <td>{order.customerName}</td>
                   <td>{order.productTitle}</td>
                   <td className="money-cell">{formatMoney(order.totalAmount)}</td>
-                  <td>{renderStatus(order.status)}</td>
+                  <td>{isAdmin || isCustomer ? renderTextStatus(order.status) : renderStatus(order.status)}</td>
                   <td className="number-cell">
                     {isSeller
                       ? renderStatus(order.status === 'Completed' ? 'Ready for Payout' : 'Pending')
@@ -1869,11 +2132,92 @@ export default function Dashboard({ user, userSessionName }) {
   const renderReports = () => {
     const reportRevenue = isSeller ? sellerRevenue : reports?.totalSales || 0;
     const reportProducts = isSeller ? roleProducts.length : reports?.totalProducts || 0;
+    const reportCompletedOrders = isSeller ? completedRoleOrders.length : reports?.completedOrders || 0;
     const reportSupportLoad = isSeller
       ? roleTickets.filter((ticket) => ticket.status !== 'Closed').length
       : reports?.openTickets || 0;
     const reportCategories = isSeller ? sellerSalesByCategory : reports?.salesByCategory || [];
     const reportTopProducts = isSeller ? sellerTopProducts : reports?.topProducts || [];
+
+    if (isSeller) {
+      return (
+        <div className="module-stack">
+          <div className="panel report-export-panel">
+            <div>
+              <h2>Reports Export</h2>
+              <p>Export the current analytics view as a browser-generated PDF.</p>
+            </div>
+
+            <button className="button" type="button" onClick={handleExportReportsPdf}>
+              Export PDF
+              <Download size={16} />
+            </button>
+          </div>
+
+          {renderSellerDateFilter('Reports Date Filter', { plain: true })}
+
+          <div className="grid-3 seller-report-metrics">
+            <div className="panel metric revenue">
+              <div>
+                <span>Revenue</span>
+                <strong className="money-value">{formatMoney(reportRevenue)}</strong>
+              </div>
+              <BarChart3 className="right-side-icon" size={22} />
+            </div>
+
+            <div className="panel metric">
+              <div>
+                <span>Products</span>
+                <strong className="number-value">{reportProducts}</strong>
+              </div>
+              <Layers className="right-side-icon" size={22} />
+            </div>
+
+            <div className="panel metric orders">
+              <div>
+                <span>Completed Orders</span>
+                <strong className="number-value">{reportCompletedOrders}</strong>
+              </div>
+              <Download className="right-side-icon" size={22} />
+            </div>
+          </div>
+
+          <div className="panel">
+            <h2>Sales by Category</h2>
+
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Category</th>
+                    <th className="number-cell">Orders</th>
+                    <th className="money-cell">Sales</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {reportCategories.map((item) => (
+                    <tr key={item.category}>
+                      <td>{item.category}</td>
+                      <td className="number-cell">{item.orders}</td>
+                      <td className="money-cell">{formatMoney(item.sales)}</td>
+                    </tr>
+                  ))}
+
+                  {reportCategories.length === 0 && (
+                    <tr>
+                      <td colSpan="3">
+                        <div className="empty-state">No category sales yet.</div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="module-stack">
@@ -1891,7 +2235,7 @@ export default function Dashboard({ user, userSessionName }) {
 
         {renderSellerDateFilter('Reports Date Filter')}
 
-        <div className="grid-3">
+        <div className={`grid-3 ${isAdmin ? 'admin-report-metrics admin-metric-row' : ''}`}>
           <div className="panel metric revenue">
             <div>
               <span>Revenue</span>
@@ -2028,7 +2372,6 @@ export default function Dashboard({ user, userSessionName }) {
               <th>Email</th>
               <th>Role</th>
               <th>Email</th>
-              <th>2FA</th>
               <th className="number-cell">Products</th>
               <th className="number-cell">Orders</th>
               <th className="number-cell">Tickets</th>
@@ -2043,7 +2386,6 @@ export default function Dashboard({ user, userSessionName }) {
               const email = account.email || account.Email || 'No email';
               const accountRole = account.role || account.Role || 'Customer';
               const isEmailVerified = account.isEmailVerified ?? account.IsEmailVerified;
-              const isTwoFactorEnabled = account.isTwoFactorEnabled ?? account.IsTwoFactorEnabled;
 
               return (
                 <tr key={accountId || email}>
@@ -2052,8 +2394,7 @@ export default function Dashboard({ user, userSessionName }) {
                   </td>
                   <td>{email}</td>
                   <td>{accountRole}</td>
-                  <td>{renderStatus(isEmailVerified ? 'Verified' : 'Unverified')}</td>
-                  <td>{renderStatus(isTwoFactorEnabled ? 'Enabled' : 'Disabled')}</td>
+                  <td>{renderTextStatus(isEmailVerified ? 'Verified' : 'Unverified')}</td>
                   <td className="number-cell">{account.productCount || account.ProductCount || 0}</td>
                   <td className="number-cell">{account.orderCount || account.OrderCount || 0}</td>
                   <td className="number-cell">{account.ticketCount || account.TicketCount || 0}</td>
@@ -2064,7 +2405,7 @@ export default function Dashboard({ user, userSessionName }) {
 
             {users.length === 0 && (
               <tr>
-                <td colSpan="9">
+                <td colSpan="8">
                   <div className="empty-state">No users found yet.</div>
                 </td>
               </tr>
@@ -2094,7 +2435,6 @@ export default function Dashboard({ user, userSessionName }) {
                 <strong>Email</strong>
                 <span>{profile.email || 'Not provided'}</span>
               </div>
-              {renderStatus(profile.isTwoFactorEnabled ? '2FA Enabled' : '2FA Disabled')}
             </div>
 
             <div className="mini-row">
@@ -2203,15 +2543,6 @@ export default function Dashboard({ user, userSessionName }) {
               value={profile.payoutAccountNumber}
               onChange={(e) => setProfile({ ...profile, payoutAccountNumber: e.target.value })}
             />
-          </div>
-
-          <div className="field checkbox-row">
-            <input
-              type="checkbox"
-              checked={profile.isTwoFactorEnabled}
-              onChange={(e) => setProfile({ ...profile, isTwoFactorEnabled: e.target.checked })}
-            />
-            <label>Enable 2FA flag</label>
           </div>
 
           <div className="field full">
@@ -2458,7 +2789,13 @@ export default function Dashboard({ user, userSessionName }) {
           <div className="chatbox-header">
             <div>
               <strong>{isSeller ? 'Buyer Messenger' : 'Seller Messenger'}</strong>
-              <span>{isSeller ? 'Customer questions' : 'Product and order chat'}</span>
+              <span>
+                {activeChatThread
+                  ? `${activeChatThread.displayName} - ${activeChatThread.productTitle || 'Digital product'}`
+                  : isSeller
+                    ? 'No buyer conversations yet'
+                    : 'No seller conversations yet'}
+              </span>
             </div>
 
             <button className="modal-close-button" type="button" onClick={() => setIsChatOpen(false)}>
@@ -2466,10 +2803,40 @@ export default function Dashboard({ user, userSessionName }) {
             </button>
           </div>
 
+          {chatThreads.length > 0 && (
+            <div className="chat-thread-list">
+              {chatThreads.map((thread) => (
+                <button
+                  className={thread.threadId === activeChatThreadId ? 'active' : ''}
+                  key={thread.threadId}
+                  type="button"
+                  onClick={() => setActiveChatThreadId(thread.threadId)}
+                >
+                  <strong>{thread.displayName}</strong>
+                  <span>{thread.productTitle || thread.lastMessage || 'Conversation'}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="chatbox-messages">
+            {isChatLoading && <div className="empty-state">Loading conversation...</div>}
+
+            {!isChatLoading && chatThreads.length === 0 && (
+              <div className="empty-state">
+                {isSeller
+                  ? 'Buyer chats appear after customers purchase your products.'
+                  : 'Seller chats appear after you purchase a product.'}
+              </div>
+            )}
+
+            {!isChatLoading && activeChatThread && chatMessages.length === 0 && (
+              <div className="empty-state">No messages yet. Start the conversation.</div>
+            )}
+
             {chatMessages.map((message) => (
               <div
-                className={`chat-message ${message.sender === displayName ? 'mine' : ''}`}
+                className={`chat-message ${Number(message.senderId) === Number(userId) ? 'mine' : ''}`}
                 key={message.id}
               >
                 <span>{message.sender}</span>
@@ -2484,8 +2851,9 @@ export default function Dashboard({ user, userSessionName }) {
               value={chatDraft}
               onChange={(event) => setChatDraft(event.target.value)}
               placeholder="Write a message"
+              disabled={!activeChatThread}
             />
-            <button className="button icon-only-button" type="submit" aria-label="Send message">
+            <button className="button icon-only-button" type="submit" aria-label="Send message" disabled={!activeChatThread}>
               <Send size={16} />
             </button>
           </form>
@@ -2565,7 +2933,7 @@ export default function Dashboard({ user, userSessionName }) {
                   <td>{ticket.priority}</td>
                   <td>
                     {isCustomer || isAdmin ? (
-                      renderStatus(ticket.status)
+                      isAdmin ? renderTextStatus(ticket.status) : renderStatus(ticket.status)
                     ) : (
                       <select value={ticket.status} onChange={(e) => handleTicketStatus(ticket, e.target.value)}>
                         <option value="Open">Open</option>
@@ -2600,15 +2968,15 @@ export default function Dashboard({ user, userSessionName }) {
   const moduleCopy = {
     Admin: {
       overview: ['System Overview', 'Marketplace-wide status across products, payments, reports, and support records.'],
-      products: ['Product Governance', 'View listings, versions, category placement, and product status across the marketplace.'],
+      products: ['Products', 'View listings, versions, category placement, and product status across the marketplace.'],
       categories: [
-        'Category Directory',
+        'Category',
         'View category counts across software and tech, business and finance, 3D assets, design assets, courses, productivity, and entertainment.',
       ],
-      payments: ['Payment Ledger', 'Audit sandbox GCash/Card payments and generated access tokens.'],
+      payments: ['Payment', 'Audit sandbox GCash/Card payments and generated access tokens.'],
       reports: ['Reports and Analytics', 'Review sales analytics, category performance, top products, and support load.'],
       users: ['User Directory', 'View registered admins, sellers, and customers without changing their account records.'],
-      profile: ['Admin Profile', 'View account details, payout settings, and the 2FA account flag.'],
+      profile: ['Admin Profile', 'View account details and payout settings.'],
       support: ['Helpdesk Monitor', 'View product and order-related support tickets across the marketplace.'],
     },
     Seller: {
@@ -2616,7 +2984,7 @@ export default function Dashboard({ user, userSessionName }) {
       products: ['Creator Listings', 'Upload products, set prices, and push version updates to buyers.'],
       payments: ['Payout Activity', 'Monitor buyer orders, delivery access, and checkout references.'],
       reports: ['Creator Analytics', 'See what sells, what needs updates, and where support needs attention.'],
-      profile: ['Seller Profile', 'Maintain storefront details, payout account, and 2FA settings.'],
+      profile: ['Seller Profile', 'Maintain storefront details and payout account settings.'],
       support: ['Buyer Support', 'Respond to product and order issues connected to your listings.'],
     },
     Customer: {
@@ -2629,6 +2997,9 @@ export default function Dashboard({ user, userSessionName }) {
   };
 
   const activeCopy = moduleCopy[normalizedRole]?.[activeRoleModule] || moduleCopy.Customer.overview;
+  const adminPlainHeaderModules = ['overview', 'reports', 'users', 'products', 'categories', 'payments', 'support', 'profile'];
+  const sellerPlainHeaderModules = ['overview', 'products', 'payments', 'reports', 'support', 'profile'];
+  const customerPlainHeaderModules = ['overview', 'products', 'payments', 'support', 'profile'];
 
   const renderActiveModule = () => {
     switch (activeRoleModule) {
@@ -2687,7 +3058,15 @@ export default function Dashboard({ user, userSessionName }) {
       </aside>
 
       <main className="dashboard-content">
-        <div className="module-header">
+        <div
+          className={`module-header ${
+            (isAdmin && adminPlainHeaderModules.includes(activeRoleModule))
+              || (isSeller && sellerPlainHeaderModules.includes(activeRoleModule))
+              || (isCustomer && customerPlainHeaderModules.includes(activeRoleModule))
+              ? 'seller-dashboard-heading'
+              : ''
+          }`}
+        >
           <div>
             <h1>{activeCopy[0]}</h1>
             <p>{activeCopy[1]}</p>

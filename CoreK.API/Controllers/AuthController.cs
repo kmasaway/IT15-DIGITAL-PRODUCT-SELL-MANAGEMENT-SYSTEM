@@ -182,24 +182,7 @@ namespace CoreK.API.Controllers
                 return BadRequest("Please verify your account using the 6-digit code sent to your email before signing in.");
             }
 
-            var token = CreateJwtToken(user);
-
-            return Ok(new { 
-                token = token,
-                user = new
-                {
-                    user.UserId,
-                    user.FullName,
-                    user.Email,
-                    user.Role,
-                    user.PhoneNumber,
-                    user.Bio,
-                    user.PayoutMethod,
-                    user.PayoutAccountName,
-                    user.PayoutAccountNumber,
-                    user.IsTwoFactorEnabled
-                }
-            });
+            return Ok(CreateAuthResponse(user));
         }
 
         private string CreateJwtToken(User user)
@@ -233,5 +216,26 @@ namespace CoreK.API.Controllers
 
             return tokenHandler.WriteToken(token);
         }
+
+        private object CreateAuthResponse(User user)
+        {
+            return new
+            {
+                token = CreateJwtToken(user),
+                user = new
+                {
+                    user.UserId,
+                    user.FullName,
+                    user.Email,
+                    user.Role,
+                    user.PhoneNumber,
+                    user.Bio,
+                    user.PayoutMethod,
+                    user.PayoutAccountName,
+                    user.PayoutAccountNumber
+                }
+            };
+        }
+
     }
 }

@@ -209,11 +209,17 @@ namespace CoreK.API.Controllers
             product.Title = productDto.Title;
             product.Description = productDto.Description;
             product.Price = productDto.Price;
-            product.IsActive = productDto.IsActive;
+            product.IsActive = IsAdmin ? productDto.IsActive : false;
 
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = "Product listing updated successfully." });
+            return Ok(new
+            {
+                message = IsAdmin
+                    ? "Product listing updated successfully."
+                    : "Product listing updated and waiting for admin validation.",
+                status = product.IsActive ? "Approved" : "Pending Review"
+            });
         }
 
         [HttpDelete("{productId}")]
