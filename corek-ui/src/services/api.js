@@ -1,6 +1,6 @@
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5132/api';
 
-async function parseResponse(response) {
+async function parseResponse(response, path = '') {
   const text = await response.text();
   let payload;
 
@@ -11,6 +11,17 @@ async function parseResponse(response) {
   }
 
   if (!response.ok) {
+    if (response.status === 401 && !path.startsWith('/Auth/login')) {
+      localStorage.removeItem('sys_auth_token');
+      localStorage.removeItem('corek_user');
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('corek:unauthorized'));
+      }
+
+      throw new Error('Your session expired. Please log in again.');
+    }
+
     const message = payload?.message || payload || `Request failed with status ${response.status}`;
     throw new Error(message);
   }
@@ -39,7 +50,7 @@ async function request(path, options = {}) {
     );
   }
 
-  return parseResponse(response);
+  return parseResponse(response, path);
 }
 
 export const api = {

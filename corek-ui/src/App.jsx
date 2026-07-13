@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import LandingPage from './pages/LandingPage';
 import AuthModal from './components/AuthModal';
 import Dashboard from './pages/Dashboard';
@@ -6,6 +6,12 @@ import Dashboard from './pages/Dashboard';
 export default function App() {
   const savedUser = useMemo(() => {
     try {
+      const savedToken = localStorage.getItem('sys_auth_token');
+      if (!savedToken) {
+        localStorage.removeItem('corek_user');
+        return null;
+      }
+
       return JSON.parse(localStorage.getItem('corek_user') || 'null');
     } catch {
       return null;
@@ -34,11 +40,19 @@ export default function App() {
   };
 
   // Safely destroys state token context parameters for session logout
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     setSessionUser(null);
     localStorage.removeItem('corek_user');
     localStorage.removeItem('sys_auth_token');
-  };
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('corek:unauthorized', handleLogout);
+
+    return () => {
+      window.removeEventListener('corek:unauthorized', handleLogout);
+    };
+  }, [handleLogout]);
 
   return (
     <div style={styles.appContainer}>

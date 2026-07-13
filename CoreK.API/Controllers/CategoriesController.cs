@@ -20,6 +20,7 @@ namespace CoreK.API.Controllers
         }
 
         [HttpGet]
+        [AllowAnonymous]
         public async Task<IActionResult> GetCategories()
         {
             var categories = await _context.Categories

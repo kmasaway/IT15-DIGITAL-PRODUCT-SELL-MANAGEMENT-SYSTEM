@@ -22,6 +22,7 @@ namespace CoreK.API.Controllers
         }
 
         [HttpGet]
+        [AllowAnonymous]
         public async Task<IActionResult> GetAllProducts([FromQuery] int? categoryId, [FromQuery] string? search)
         {
             var query = _context.Products
@@ -80,6 +81,7 @@ namespace CoreK.API.Controllers
         }
 
         [HttpGet("{productId}")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetProduct(int productId)
         {
             var product = await _context.Products
@@ -88,6 +90,10 @@ namespace CoreK.API.Controllers
                 .FirstOrDefaultAsync(p => p.ProductId == productId);
 
             if (product == null) return NotFound("Product listing not found.");
+            if (!product.IsActive && !IsAdmin && product.SellerId != CurrentUserId)
+            {
+                return NotFound("Product listing not found.");
+            }
 
             return Ok(new
             {
@@ -130,6 +136,7 @@ namespace CoreK.API.Controllers
                 .Select(p => new
                 {
                     p.ProductId,
+                    p.SellerId,
                     p.CategoryId,
                     p.Title,
                     p.Description,
@@ -150,48 +157,108 @@ namespace CoreK.API.Controllers
 
         [HttpPost("upload")]
         [Authorize(Roles = "Admin,Seller")]
-        public async Task<IActionResult> UploadProduct([FromForm] CreateProductDto productDto, IFormFile? file)
+        public async Task<IActionResult> UploadProduct([FromForm] CreateProductDto productDto, [FromForm(Name = "file")] IFormFile? file)
         {
-            if (file == null || file.Length == 0)
+            var uploadedFile = file
+                ?? Request.Form.Files.GetFile("file")
+                ?? Request.Form.Files.GetFile("coverPhoto")
+                ?? Request.Form.Files.FirstOrDefault();
+
+            if (uploadedFile == null || uploadedFile.Length == 0)
                 return BadRequest("A digital file asset must be provided.");
 
-            var categoryExists = await _context.Categories.AnyAsync(c => c.CategoryId == productDto.CategoryId);
-            if (!categoryExists) return BadRequest("Invalid category specified.");
+            var categoryName = await _context.Categories
+                .Where(c => c.CategoryId == productDto.CategoryId)
+                .Select(c => c.CategoryName)
+                .FirstOrDefaultAsync();
+            if (categoryName == null) return BadRequest("Invalid category specified.");
 
-            var product = new Product
+            var sellerId = IsAdmin && productDto.SellerId > 0 ? productDto.SellerId : CurrentUserId;
+            if (sellerId <= 0)
             {
-                SellerId = IsAdmin && productDto.SellerId > 0 ? productDto.SellerId : CurrentUserId,
-                CategoryId = productDto.CategoryId,
-                Title = productDto.Title,
-                Description = productDto.Description,
-                Price = productDto.Price,
-                IsActive = IsAdmin
-            };
+                return Unauthorized("Your seller session could not be verified. Please sign in again.");
+            }
 
-            _context.Products.Add(product);
-            await _context.SaveChangesAsync(); // Saves product first to generate its unique ProductId
-
-            string filePath = await SaveUploadedAsset(file);
-
-            var initialVersion = new ProductVersion
+            var seller = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.UserId == sellerId);
+            if (seller == null)
             {
-                ProductId = product.ProductId,
-                VersionNumber = "1.0.0",
-                Changelog = "Initial Release Asset.",
-                SecureFilePath = filePath
-            };
+                return BadRequest("Seller account was not found.");
+            }
 
-            _context.ProductVersions.Add(initialVersion);
-            await _context.SaveChangesAsync();
-
-            return Ok(new
+            if (!string.Equals(seller.Role, "Seller", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(seller.Role, "Admin", StringComparison.OrdinalIgnoreCase))
             {
-                message = product.IsActive
-                    ? "Product and initial version uploaded successfully!"
-                    : "Product submitted and waiting for admin validation.",
-                productId = product.ProductId,
-                status = product.IsActive ? "Approved" : "Pending Review"
-            });
+                return BadRequest("Products can only be assigned to seller accounts.");
+            }
+
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            string? savedFilePath = null;
+
+            try
+            {
+                var product = new Product
+                {
+                    SellerId = sellerId,
+                    CategoryId = productDto.CategoryId,
+                    Title = productDto.Title.Trim(),
+                    Description = productDto.Description.Trim(),
+                    Price = productDto.Price,
+                    IsActive = IsAdmin
+                };
+
+                _context.Products.Add(product);
+                await _context.SaveChangesAsync(); // Saves product first to generate its unique ProductId
+
+                savedFilePath = await SaveUploadedAsset(uploadedFile);
+
+                var initialVersion = new ProductVersion
+                {
+                    ProductId = product.ProductId,
+                    VersionNumber = "1.0.0",
+                    Changelog = "Initial Release Asset.",
+                    SecureFilePath = savedFilePath
+                };
+
+                _context.ProductVersions.Add(initialVersion);
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return Ok(new
+                {
+                    message = product.IsActive
+                        ? "Product and initial version uploaded successfully!"
+                        : "Product submitted and waiting for admin validation.",
+                    productId = product.ProductId,
+                    status = product.IsActive ? "Approved" : "Pending Review",
+                    product = new
+                    {
+                        product.ProductId,
+                        product.SellerId,
+                        product.CategoryId,
+                        product.Title,
+                        product.Description,
+                        product.Price,
+                        product.IsActive,
+                        product.CreatedAt,
+                        Category = categoryName,
+                        CategoryName = categoryName,
+                        VersionCount = 1,
+                        LatestVersion = "1.0.0"
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+
+                if (!string.IsNullOrWhiteSpace(savedFilePath) && System.IO.File.Exists(savedFilePath))
+                {
+                    System.IO.File.Delete(savedFilePath);
+                }
+
+                Console.WriteLine($">>> PRODUCT UPLOAD ERROR: {ex.Message}");
+                return StatusCode(500, "Unable to submit the product listing. Please try again.");
+            }
         }
 
         [HttpPut("{productId}")]
@@ -267,7 +334,13 @@ namespace CoreK.API.Controllers
             string uploadsFolder = Path.Combine(_environment.ContentRootPath, "wwwroot", "uploads");
             if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);
 
-            string uniqueFileName = $"{Guid.NewGuid()}_{file.FileName}";
+            string safeFileName = Path.GetFileName(file.FileName);
+            if (string.IsNullOrWhiteSpace(safeFileName))
+            {
+                safeFileName = "product-upload.bin";
+            }
+
+            string uniqueFileName = $"{Guid.NewGuid()}_{safeFileName}";
             string filePath = Path.Combine(uploadsFolder, uniqueFileName);
 
             using (var fileStream = new FileStream(filePath, FileMode.Create))

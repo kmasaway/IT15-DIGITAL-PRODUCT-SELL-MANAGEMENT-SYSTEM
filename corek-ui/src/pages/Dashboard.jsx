@@ -12,7 +12,6 @@ import {
   LifeBuoy,
   MessageCircle,
   Package,
-  Pencil,
   Plus,
   Save,
   Search,
@@ -190,6 +189,21 @@ function isImageFile(file) {
   return Boolean(file?.type?.startsWith('image/'));
 }
 
+function normalizePriceInput(value) {
+  const sanitizedValue = String(value ?? '').replace(/[^\d.]/g, '');
+  const [wholePart, ...decimalParts] = sanitizedValue.split('.');
+  const trimmedWholePart = wholePart.replace(/^0+(?=\d)/, '');
+  const normalizedWholePart = sanitizedValue.startsWith('.') ? '0' : trimmedWholePart;
+  const decimalPart = decimalParts.join('').slice(0, 2);
+
+  return decimalParts.length > 0 ? `${normalizedWholePart}.${decimalPart}` : normalizedWholePart;
+}
+
+function getValidPrice(value) {
+  const price = Number(normalizePriceInput(value));
+  return Number.isFinite(price) && price > 0 ? price : null;
+}
+
 function DashboardModal({ title, subtitle, children, onClose, size = 'regular' }) {
   return (
     <div className="dashboard-modal-backdrop" role="presentation">
@@ -253,6 +267,7 @@ export default function Dashboard({ user, userSessionName }) {
     paymentMethod: 'GCash',
   });
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [activeProductView, setActiveProductView] = useState(null);
   const [productModalMode, setProductModalMode] = useState('details');
   const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
   const [activeTicket, setActiveTicket] = useState(null);
@@ -288,6 +303,7 @@ export default function Dashboard({ user, userSessionName }) {
   const [marketplaceSort, setMarketplaceSort] = useState('featured');
   const [marketplacePage, setMarketplacePage] = useState(1);
   const [notice, setNotice] = useState('');
+  const [notificationModalMessage, setNotificationModalMessage] = useState('');
   const [error, setError] = useState('');
   const [, setIsLoading] = useState(false);
   const productImagePreviewUrl = useMemo(
@@ -311,8 +327,8 @@ export default function Dashboard({ user, userSessionName }) {
 
   const roleProducts = useMemo(() => {
     if (!isSeller) return products;
-    return products.filter((product) => Number(product.sellerId) === Number(userId));
-  }, [isSeller, products, userId]);
+    return products;
+  }, [isSeller, products]);
 
   const roleOrders = useMemo(() => {
     if (!isSeller) return orders;
@@ -999,12 +1015,18 @@ export default function Dashboard({ user, userSessionName }) {
   const handleProductSubmit = async (event) => {
     event.preventDefault();
 
+    const price = getValidPrice(productForm.price);
+    if (price === null) {
+      showError('Enter a valid price greater than zero.');
+      return;
+    }
+
     try {
       if (productForm.productId) {
         await api.updateProduct(productForm.productId, {
           title: productForm.title,
           description: productForm.description,
-          price: Number(productForm.price),
+          price,
           categoryId: Number(productForm.categoryId),
           isActive: productForm.isActive,
         });
@@ -1018,16 +1040,43 @@ export default function Dashboard({ user, userSessionName }) {
         const formData = new FormData();
         formData.append('title', productForm.title);
         formData.append('description', productForm.description);
-        formData.append('price', productForm.price);
+        formData.append('price', price.toFixed(2));
         formData.append('categoryId', productForm.categoryId);
         formData.append('sellerId', userId);
         formData.append('file', productForm.coverPhotoFile);
         formData.append('coverPhoto', productForm.coverPhotoFile);
 
-        await api.uploadProduct(formData);
-        showNotice(isSeller
-          ? 'Request to sell submitted for admin validation.'
-          : 'Product uploaded with initial version.');
+        const uploadResult = await api.uploadProduct(formData);
+        if (isSeller) {
+          const selectedCategory = categories.find((category) => (
+            Number(category.categoryId) === Number(productForm.categoryId)
+          ));
+          const submittedProduct = uploadResult?.product || {
+            productId: uploadResult?.productId || `submitted-${Date.now()}`,
+            sellerId: Number(userId),
+            categoryId: Number(productForm.categoryId),
+            title: productForm.title,
+            description: productForm.description,
+            price,
+            isActive: false,
+            createdAt: new Date().toISOString(),
+            category: selectedCategory?.categoryName || 'Digital Product',
+            categoryName: selectedCategory?.categoryName || 'Digital Product',
+            versionCount: 1,
+            latestVersion: '1.0.0',
+          };
+
+          setProducts((currentProducts) => [
+            submittedProduct,
+            ...currentProducts.filter((product) => (
+              String(product.productId) !== String(submittedProduct.productId)
+            )),
+          ]);
+          setNotificationModalMessage('Requested to Sell');
+          setNotice('');
+        } else {
+          showNotice('Product uploaded with initial version.');
+        }
       }
 
       setProductForm(emptyProductForm);
@@ -1504,34 +1553,25 @@ export default function Dashboard({ user, userSessionName }) {
 
             <div className="field">
               <label>Price</label>
-              <input
-                className="number-input"
-                required
-                type="number"
-                min="1"
-                step="0.01"
-                value={productForm.price}
-                onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
-              />
+              <div className="price-input-control">
+                <span className="price-input-prefix" aria-hidden="true">&#8369;</span>
+                <input
+                  className="number-input price-input"
+                  required
+                  type="text"
+                  inputMode="decimal"
+                  pattern="[0-9]+([.][0-9]{1,2})?"
+                  placeholder="0.00"
+                  value={productForm.price}
+                  onChange={(e) => setProductForm({
+                    ...productForm,
+                    price: normalizePriceInput(e.target.value),
+                  })}
+                />
+              </div>
             </div>
 
             <div className="field">
-              <label>Category</label>
-              <select
-                required
-                value={productForm.categoryId}
-                onChange={(e) => setProductForm({ ...productForm, categoryId: e.target.value })}
-              >
-                <option value="">Select category</option>
-                {categories.map((category) => (
-                  <option key={category.categoryId} value={category.categoryId}>
-                    {category.categoryName}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="field full">
               <label>Digital Content</label>
               <div className="content-upload-grid single">
                 <label>
@@ -1557,6 +1597,22 @@ export default function Dashboard({ user, userSessionName }) {
               {productForm.productId && (
                 <span className="field-note">Digital content media is locked while editing listing details.</span>
               )}
+            </div>
+
+            <div className="field">
+              <label>Category</label>
+              <select
+                required
+                value={productForm.categoryId}
+                onChange={(e) => setProductForm({ ...productForm, categoryId: e.target.value })}
+              >
+                <option value="">Select category</option>
+                {categories.map((category) => (
+                  <option key={category.categoryId} value={category.categoryId}>
+                    {category.categoryName}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="field full">
@@ -1651,6 +1707,70 @@ export default function Dashboard({ user, userSessionName }) {
     </DashboardModal>
   );
 
+  const renderProductViewModal = () => {
+    if (!activeProductView) return null;
+
+    const productStatus = getProductApprovalStatus(activeProductView);
+
+    return (
+      <DashboardModal title="View Product" onClose={() => setActiveProductView(null)}>
+        <div className="product-view-stack">
+          <div className="mini-row">
+            <div>
+              <strong>Title</strong>
+              <span>{activeProductView.title}</span>
+            </div>
+            {renderTextStatus(productStatus)}
+          </div>
+
+          <div className="mini-row">
+            <div>
+              <strong>Category</strong>
+              <span>{activeProductView.category || activeProductView.categoryName || 'Digital Product'}</span>
+            </div>
+            <strong className="money-value">{formatMoney(activeProductView.price)}</strong>
+          </div>
+
+          <div className="mini-row">
+            <div>
+              <strong>Version</strong>
+              <span>
+                {activeProductView.latestVersion || '1.0.0'} / {activeProductView.versionCount || 0} files
+              </span>
+            </div>
+          </div>
+
+          <div className="ticket-message-box">
+            <strong>Description</strong>
+            <p>{activeProductView.description}</p>
+          </div>
+        </div>
+
+        <div className="toolbar modal-actions">
+          <button className="button" type="button" onClick={() => setActiveProductView(null)}>
+            OK
+          </button>
+        </div>
+      </DashboardModal>
+    );
+  };
+
+  const renderNotificationModal = () => (
+    <DashboardModal title={notificationModalMessage} onClose={() => setNotificationModalMessage('')}>
+      <div className="request-notification">
+        <ShieldCheck size={30} />
+        <strong>{notificationModalMessage}</strong>
+        <p>Your request is now shown in the Product Listings table for admin validation.</p>
+      </div>
+
+      <div className="toolbar modal-actions">
+        <button className="button" type="button" onClick={() => setNotificationModalMessage('')}>
+          OK
+        </button>
+      </div>
+    </DashboardModal>
+  );
+
   const renderProducts = () => {
     if (isCustomer) {
       return renderCustomerMarketplace();
@@ -1726,7 +1846,7 @@ export default function Dashboard({ user, userSessionName }) {
                     <td className="number-cell">
                       {product.latestVersion || '1.0.0'} · {product.versionCount || 0} files
                     </td>
-                    <td>{isAdmin ? renderTextStatus(productStatus) : renderStatus(productStatus)}</td>
+                    <td>{renderTextStatus(productStatus)}</td>
 
                     <td className="actions">
                       {isAdmin ? (
@@ -1763,26 +1883,15 @@ export default function Dashboard({ user, userSessionName }) {
                           </button>
                         </>
                       ) : (
-                        <>
-                        <button
-                          className="button secondary"
-                          type="button"
-                          onClick={() => openProductDetailsModal(product)}
-                        >
-                          Edit
-                          <Pencil size={14} />
-                        </button>
-
                         <button
                           className="button secondary icon-only-button"
                           type="button"
-                          aria-label={`View versions for ${product.title}`}
-                          title="View versions"
-                          onClick={() => openVersionModal(product.productId)}
+                          aria-label={`View ${product.title}`}
+                          title="View"
+                          onClick={() => setActiveProductView(product)}
                         >
                           <Eye size={14} />
                         </button>
-                        </>
                       )}
                     </td>
                   </tr>
@@ -3080,6 +3189,8 @@ export default function Dashboard({ user, userSessionName }) {
       </main>
 
       {isProductModalOpen && renderProductListingModal()}
+      {activeProductView && renderProductViewModal()}
+      {notificationModalMessage && renderNotificationModal()}
       {isTicketModalOpen && renderSupportTicketModal()}
       {activeTicket && renderTicketDetailsModal()}
       {isValidIdModalOpen && renderValidIdModal()}
