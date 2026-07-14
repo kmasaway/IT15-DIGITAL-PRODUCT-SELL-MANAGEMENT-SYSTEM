@@ -1,6 +1,7 @@
 using CoreK.API.Data;
 using CoreK.API.DTOs;
 using CoreK.API.Models;
+using Microsoft.Data.SqlClient;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -33,10 +34,19 @@ namespace CoreK.API.Controllers
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> GetValidIds()
         {
-            var submissions = await _context.ValidIdSubmissions
-                .Include(v => v.User)
-                .OrderByDescending(v => v.SubmittedAt)
-                .ToListAsync();
+            List<ValidIdSubmission> submissions;
+
+            try
+            {
+                submissions = await _context.ValidIdSubmissions
+                    .Include(v => v.User)
+                    .OrderByDescending(v => v.SubmittedAt)
+                    .ToListAsync();
+            }
+            catch (Exception ex) when (IsMissingSellerAccountStorage(ex))
+            {
+                return Ok(Array.Empty<object>());
+            }
 
             return Ok(submissions.Select(ToValidIdResponse));
         }
@@ -47,9 +57,18 @@ namespace CoreK.API.Controllers
         {
             if (!IsSelfOrAdmin(userId)) return Forbid();
 
-            var submission = await _context.ValidIdSubmissions
-                .Include(v => v.User)
-                .FirstOrDefaultAsync(v => v.UserId == userId);
+            ValidIdSubmission? submission;
+
+            try
+            {
+                submission = await _context.ValidIdSubmissions
+                    .Include(v => v.User)
+                    .FirstOrDefaultAsync(v => v.UserId == userId);
+            }
+            catch (Exception ex) when (IsMissingSellerAccountStorage(ex))
+            {
+                return Ok(null);
+            }
 
             return Ok(submission == null ? null : ToValidIdResponse(submission));
         }
@@ -85,8 +104,18 @@ namespace CoreK.API.Controllers
             if (user == null) return NotFound("User account was not found.");
 
             var savedFilePath = await SaveUploadedAsset(uploadedFile);
-            var existingSubmission = await _context.ValidIdSubmissions
-                .FirstOrDefaultAsync(v => v.UserId == userId);
+
+            ValidIdSubmission? existingSubmission;
+
+            try
+            {
+                existingSubmission = await _context.ValidIdSubmissions
+                    .FirstOrDefaultAsync(v => v.UserId == userId);
+            }
+            catch (Exception ex) when (IsMissingSellerAccountStorage(ex))
+            {
+                return StatusCode(503, new { message = "Valid ID storage is still being prepared. Please try again shortly." });
+            }
 
             if (existingSubmission == null)
             {
@@ -165,8 +194,17 @@ namespace CoreK.API.Controllers
             var seller = await _context.Users.FindAsync(sellerId);
             if (seller == null) return NotFound("Seller account was not found.");
 
-            var subscription = await GetOrCreateSubscription(seller);
-            await _context.SaveChangesAsync();
+            SellerSubscription subscription;
+
+            try
+            {
+                subscription = await GetOrCreateSubscription(seller);
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex) when (IsMissingSellerAccountStorage(ex))
+            {
+                subscription = CreateDefaultSubscription(seller);
+            }
 
             return Ok(ToSubscriptionResponse(subscription));
         }
@@ -192,7 +230,17 @@ namespace CoreK.API.Controllers
                 return BadRequest("Unsupported billing cycle.");
             }
 
-            var subscription = await GetOrCreateSubscription(seller);
+            SellerSubscription subscription;
+
+            try
+            {
+                subscription = await GetOrCreateSubscription(seller);
+            }
+            catch (Exception ex) when (IsMissingSellerAccountStorage(ex))
+            {
+                return StatusCode(503, new { message = "Subscription storage is still being prepared. Please try again shortly." });
+            }
+
             subscription.Plan = dto.Plan.Trim();
             subscription.BillingCycle = dto.BillingCycle.Trim();
             subscription.BillingEmail = dto.BillingEmail.Trim();
@@ -207,6 +255,15 @@ namespace CoreK.API.Controllers
                 message = "ERP subscription settings were updated.",
                 subscription = ToSubscriptionResponse(subscription)
             });
+        }
+
+        private static SellerSubscription CreateDefaultSubscription(User seller)
+        {
+            return new SellerSubscription
+            {
+                SellerId = seller.UserId,
+                BillingEmail = seller.Email
+            };
         }
 
         private async Task<SellerSubscription> GetOrCreateSubscription(User seller)
@@ -277,6 +334,24 @@ namespace CoreK.API.Controllers
                 subscription.AutoRenew,
                 subscription.UpdatedAt
             };
+        }
+
+        private static bool IsMissingSellerAccountStorage(Exception exception)
+        {
+            var currentException = exception;
+
+            while (currentException != null)
+            {
+                if (currentException is SqlException sqlException
+                    && sqlException.Errors.Cast<SqlError>().Any(error => error.Number is 207 or 208))
+                {
+                    return true;
+                }
+
+                currentException = currentException.InnerException;
+            }
+
+            return false;
         }
 
         private static string? GetPublicAssetUrl(string? filePath)

@@ -2,6 +2,7 @@ using CoreK.API.Data;
 using CoreK.API.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using System.Text;
@@ -71,6 +72,7 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
+    EnsureSellerAccountTables(db, app.Logger);
     SeedMarketplaceCategories(db);
     SeedAdminAccount(db, app.Configuration);
 }
@@ -123,6 +125,74 @@ static void SeedAdminAccount(AppDbContext db, IConfiguration configuration)
 
     db.Users.Add(admin);
     db.SaveChanges();
+}
+
+static void EnsureSellerAccountTables(AppDbContext db, ILogger logger)
+{
+    try
+    {
+        db.Database.ExecuteSqlRaw("""
+            IF OBJECT_ID(N'[SellerSubscriptions]', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [SellerSubscriptions] (
+                    [SellerSubscriptionId] int NOT NULL IDENTITY,
+                    [SellerId] int NOT NULL,
+                    [Plan] nvarchar(50) NOT NULL,
+                    [BillingCycle] nvarchar(50) NOT NULL,
+                    [BillingEmail] nvarchar(150) NOT NULL,
+                    [Seats] int NOT NULL,
+                    [AutoRenew] bit NOT NULL,
+                    [UpdatedAt] datetime2 NOT NULL,
+                    CONSTRAINT [PK_SellerSubscriptions] PRIMARY KEY ([SellerSubscriptionId]),
+                    CONSTRAINT [FK_SellerSubscriptions_Users_SellerId] FOREIGN KEY ([SellerId]) REFERENCES [Users] ([UserId]) ON DELETE CASCADE
+                );
+            END;
+
+            IF OBJECT_ID(N'[ValidIdSubmissions]', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [ValidIdSubmissions] (
+                    [ValidIdSubmissionId] int NOT NULL IDENTITY,
+                    [UserId] int NOT NULL,
+                    [IdType] nvarchar(50) NOT NULL,
+                    [IdNumber] nvarchar(80) NOT NULL,
+                    [FileName] nvarchar(260) NOT NULL,
+                    [FilePath] nvarchar(500) NOT NULL,
+                    [Status] nvarchar(50) NOT NULL,
+                    [Remarks] nvarchar(500) NULL,
+                    [SubmittedAt] datetime2 NOT NULL,
+                    [ReviewedAt] datetime2 NULL,
+                    CONSTRAINT [PK_ValidIdSubmissions] PRIMARY KEY ([ValidIdSubmissionId]),
+                    CONSTRAINT [FK_ValidIdSubmissions_Users_UserId] FOREIGN KEY ([UserId]) REFERENCES [Users] ([UserId]) ON DELETE CASCADE
+                );
+            END;
+
+            IF OBJECT_ID(N'[SellerSubscriptions]', N'U') IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM sys.indexes
+                    WHERE [name] = N'IX_SellerSubscriptions_SellerId'
+                        AND [object_id] = OBJECT_ID(N'[SellerSubscriptions]')
+                )
+            BEGIN
+                CREATE UNIQUE INDEX [IX_SellerSubscriptions_SellerId] ON [SellerSubscriptions] ([SellerId]);
+            END;
+
+            IF OBJECT_ID(N'[ValidIdSubmissions]', N'U') IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM sys.indexes
+                    WHERE [name] = N'IX_ValidIdSubmissions_UserId'
+                        AND [object_id] = OBJECT_ID(N'[ValidIdSubmissions]')
+                )
+            BEGIN
+                CREATE UNIQUE INDEX [IX_ValidIdSubmissions_UserId] ON [ValidIdSubmissions] ([UserId]);
+            END;
+            """);
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, "Seller account tables could not be verified or created.");
+    }
 }
 
 static void SeedMarketplaceCategories(AppDbContext db)
