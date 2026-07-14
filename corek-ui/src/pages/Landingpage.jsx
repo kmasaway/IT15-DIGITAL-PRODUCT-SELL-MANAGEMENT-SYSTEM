@@ -420,7 +420,7 @@ export default function LandingPage({ onOpenAuthModal }) {
 
 const styles = {
   main: {
-    padding: '3rem var(--app-page-x-padding) 6rem',
+    padding: '1.5rem var(--app-page-x-padding) 6rem',
     maxWidth: 'none',
     margin: '0 auto',
     width: '100%',
@@ -432,7 +432,7 @@ const styles = {
     gridTemplateColumns: '1.1fr 0.9fr',
     gap: '4rem',
     alignItems: 'center',
-    marginBottom: '6rem',
+    marginBottom: '14rem',
   },
   heroLeft: {
     display: 'flex',
@@ -444,7 +444,7 @@ const styles = {
     fontSize: '4.2rem',
     fontWeight: '800',
     lineHeight: 1.1,
-    marginBottom: '1.5rem',
+    margin: '0 0 1.5rem 0',
     letterSpacing: '-2px',
     color: '#0f291e',
   },
