@@ -72,7 +72,15 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.Migrate();
+    try
+    {
+        db.Database.Migrate();
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "EF migrations could not complete; continuing with operational schema verification.");
+    }
+
     EnsureSellerAccountTables(db, app.Logger);
     SeedMarketplaceCategories(db);
     SeedAdminAccount(db, app.Configuration);
@@ -205,6 +213,66 @@ static void EnsureSellerAccountTables(AppDbContext db, ILogger logger)
     try
     {
         db.Database.ExecuteSqlRaw("""
+            IF OBJECT_ID(N'[Users]', N'U') IS NOT NULL AND COL_LENGTH(N'Users', N'PhoneNumber') IS NULL
+                ALTER TABLE [Users] ADD [PhoneNumber] nvarchar(30) NULL;
+
+            IF OBJECT_ID(N'[Users]', N'U') IS NOT NULL AND COL_LENGTH(N'Users', N'Bio') IS NULL
+                ALTER TABLE [Users] ADD [Bio] nvarchar(max) NULL;
+
+            IF OBJECT_ID(N'[Users]', N'U') IS NOT NULL AND COL_LENGTH(N'Users', N'PayoutMethod') IS NULL
+                ALTER TABLE [Users] ADD [PayoutMethod] nvarchar(50) NULL;
+
+            IF OBJECT_ID(N'[Users]', N'U') IS NOT NULL AND COL_LENGTH(N'Users', N'PayoutAccountName') IS NULL
+                ALTER TABLE [Users] ADD [PayoutAccountName] nvarchar(150) NULL;
+
+            IF OBJECT_ID(N'[Users]', N'U') IS NOT NULL AND COL_LENGTH(N'Users', N'PayoutAccountNumber') IS NULL
+                ALTER TABLE [Users] ADD [PayoutAccountNumber] nvarchar(80) NULL;
+
+            IF OBJECT_ID(N'[Users]', N'U') IS NOT NULL AND COL_LENGTH(N'Users', N'IsEmailVerified') IS NULL
+                ALTER TABLE [Users] ADD [IsEmailVerified] bit NOT NULL DEFAULT CAST(1 AS bit);
+
+            IF OBJECT_ID(N'[Users]', N'U') IS NOT NULL AND COL_LENGTH(N'Users', N'EmailVerificationToken') IS NULL
+                ALTER TABLE [Users] ADD [EmailVerificationToken] nvarchar(max) NULL;
+
+            IF OBJECT_ID(N'[Orders]', N'U') IS NOT NULL AND COL_LENGTH(N'Orders', N'CustomerName') IS NULL
+                ALTER TABLE [Orders] ADD [CustomerName] nvarchar(150) NOT NULL DEFAULT N'';
+
+            IF OBJECT_ID(N'[Orders]', N'U') IS NOT NULL AND COL_LENGTH(N'Orders', N'CustomerEmail') IS NULL
+                ALTER TABLE [Orders] ADD [CustomerEmail] nvarchar(255) NOT NULL DEFAULT N'';
+
+            IF OBJECT_ID(N'[Orders]', N'U') IS NOT NULL AND COL_LENGTH(N'Orders', N'PaymentMethod') IS NULL
+                ALTER TABLE [Orders] ADD [PaymentMethod] nvarchar(50) NOT NULL DEFAULT N'GCash';
+
+            IF OBJECT_ID(N'[Orders]', N'U') IS NOT NULL AND COL_LENGTH(N'Orders', N'ReferenceNumber') IS NULL
+                ALTER TABLE [Orders] ADD [ReferenceNumber] nvarchar(80) NULL;
+
+            IF OBJECT_ID(N'[Orders]', N'U') IS NOT NULL AND COL_LENGTH(N'Orders', N'DownloadToken') IS NULL
+                ALTER TABLE [Orders] ADD [DownloadToken] nvarchar(120) NULL;
+
+            IF OBJECT_ID(N'[Orders]', N'U') IS NOT NULL AND COL_LENGTH(N'Orders', N'ProductId') IS NULL
+                ALTER TABLE [Orders] ADD [ProductId] int NOT NULL DEFAULT 0;
+
+            IF OBJECT_ID(N'[SupportTickets]', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [SupportTickets] (
+                    [SupportTicketId] int NOT NULL IDENTITY,
+                    [CustomerId] int NOT NULL,
+                    [ProductId] int NULL,
+                    [OrderId] int NULL,
+                    [CustomerName] nvarchar(150) NOT NULL,
+                    [CustomerEmail] nvarchar(255) NOT NULL,
+                    [Subject] nvarchar(160) NOT NULL,
+                    [Message] nvarchar(max) NOT NULL,
+                    [Status] nvarchar(50) NOT NULL,
+                    [Priority] nvarchar(50) NOT NULL,
+                    [CreatedAt] datetime2 NOT NULL,
+                    [UpdatedAt] datetime2 NOT NULL,
+                    CONSTRAINT [PK_SupportTickets] PRIMARY KEY ([SupportTicketId]),
+                    CONSTRAINT [FK_SupportTickets_Orders_OrderId] FOREIGN KEY ([OrderId]) REFERENCES [Orders] ([OrderId]) ON DELETE SET NULL,
+                    CONSTRAINT [FK_SupportTickets_Products_ProductId] FOREIGN KEY ([ProductId]) REFERENCES [Products] ([ProductId]) ON DELETE SET NULL
+                );
+            END;
+
             IF OBJECT_ID(N'[SellerSubscriptions]', N'U') IS NULL
             BEGIN
                 CREATE TABLE [SellerSubscriptions] (
@@ -328,6 +396,39 @@ static void EnsureSellerAccountTables(AppDbContext db, ILogger logger)
                 )
             BEGIN
                 CREATE INDEX [IX_ChatMessages_SellerId_CustomerId_CreatedAt] ON [ChatMessages] ([SellerId], [CustomerId], [CreatedAt]);
+            END;
+
+            IF OBJECT_ID(N'[SupportTickets]', N'U') IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM sys.indexes
+                    WHERE [name] = N'IX_SupportTickets_ProductId'
+                        AND [object_id] = OBJECT_ID(N'[SupportTickets]')
+                )
+            BEGIN
+                CREATE INDEX [IX_SupportTickets_ProductId] ON [SupportTickets] ([ProductId]);
+            END;
+
+            IF OBJECT_ID(N'[SupportTickets]', N'U') IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM sys.indexes
+                    WHERE [name] = N'IX_SupportTickets_OrderId'
+                        AND [object_id] = OBJECT_ID(N'[SupportTickets]')
+                )
+            BEGIN
+                CREATE INDEX [IX_SupportTickets_OrderId] ON [SupportTickets] ([OrderId]);
+            END;
+
+            IF OBJECT_ID(N'[Orders]', N'U') IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM sys.indexes
+                    WHERE [name] = N'IX_Orders_ProductId'
+                        AND [object_id] = OBJECT_ID(N'[Orders]')
+                )
+            BEGIN
+                CREATE INDEX [IX_Orders_ProductId] ON [Orders] ([ProductId]);
             END;
             """);
     }

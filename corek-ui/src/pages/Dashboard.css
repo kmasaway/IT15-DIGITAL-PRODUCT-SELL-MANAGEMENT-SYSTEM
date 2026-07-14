@@ -986,6 +986,12 @@
   flex-wrap: wrap;
 }
 
+.payout-status-actions .button {
+  min-height: 34px;
+  padding: 8px 10px;
+  font-size: 0.78rem;
+}
+
 .data-table th.center-cell,
 .data-table td.center-cell {
   text-align: center;

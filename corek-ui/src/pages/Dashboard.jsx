@@ -358,6 +358,34 @@ function getOrderSellerName(order) {
     || (order.sellerId || order.SellerId ? `Seller #${order.sellerId || order.SellerId}` : 'Seller User');
 }
 
+function getPayoutId(request) {
+  return request.payoutRequestId || request.PayoutRequestId;
+}
+
+function getPayoutSellerName(request) {
+  return request.sellerName
+    || request.SellerName
+    || (request.sellerId || request.SellerId ? `Seller #${request.sellerId || request.SellerId}` : 'Seller User');
+}
+
+function getPayoutStatus(request) {
+  return request.status || request.Status || 'Pending Review';
+}
+
+function getPayoutAmount(request) {
+  return request.amount ?? request.Amount ?? 0;
+}
+
+function getPayoutDateRange(request) {
+  const rangeStart = request.rangeStart || request.RangeStart;
+  const rangeEnd = request.rangeEnd || request.RangeEnd;
+
+  return formatDateRange({
+    start: rangeStart ? String(rangeStart).slice(0, 10) : '',
+    end: rangeEnd ? String(rangeEnd).slice(0, 10) : '',
+  });
+}
+
 function getPayoutQrCells(value) {
   const seed = String(value || 'CoreK payout');
   const matrix = Array.from({ length: PAYOUT_QR_SIZE }, () => Array(PAYOUT_QR_SIZE).fill(false));
@@ -1004,6 +1032,37 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       showError(err.message || 'Unable to request payout.');
     } finally {
       setIsPayoutSubmitting(false);
+    }
+  };
+
+  const handlePayoutStatus = async (payoutRequest, status) => {
+    const payoutRequestId = getPayoutId(payoutRequest);
+    if (!payoutRequestId) {
+      showError('Payout request details are incomplete.');
+      return;
+    }
+
+    const confirmed = await requestConfirmation({
+      title: `${status} Payout?`,
+      message: `Confirm that this payout request should be marked as ${status}.`,
+      confirmLabel: status,
+      tone: status === 'Rejected' ? 'danger' : 'default',
+    });
+    if (!confirmed) return;
+
+    try {
+      const result = await api.updatePayoutStatus(payoutRequestId, { status });
+      const savedPayout = result.payout || result;
+
+      setPayoutRequests((currentRequests) => currentRequests.map((request) => (
+        String(getPayoutId(request)) === String(payoutRequestId)
+          ? { ...request, ...savedPayout }
+          : request
+      )));
+      showNotice(result.message || 'Payout status updated.');
+      await loadDashboard();
+    } catch (err) {
+      showError(err.message || 'Unable to update payout status.');
     }
   };
 
@@ -2693,7 +2752,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
 
   const renderCategories = () => (
     <div className={isAdmin ? 'module-stack' : 'grid-2'}>
-      {!isAdmin && (
+      {isAdmin && (
         <form className="panel" onSubmit={handleCategorySubmit}>
           <h2>Create Category</h2>
 
@@ -2738,7 +2797,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                 </span>
               </div>
 
-              {!isAdmin && (
+              {isAdmin && (
                 <button
                   className="button danger icon-only-button"
                   type="button"
@@ -2993,7 +3052,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       <div className="panel">
         <div className="panel-title-row payout-records-header">
           <div>
-            <h2>{isCustomer ? 'Purchase Records' : isSeller ? 'Payout Records' : 'Payment Records'}</h2>
+            <h2>{isCustomer ? 'Purchase Records' : isSeller ? 'Sales Records' : 'Payment Records'}</h2>
             {isCustomer && <p>Date range: {formatDateRange(libraryFilters)}</p>}
             {isSeller && <p>Date range: {formatDateRange(sellerDateFilters)}</p>}
           </div>
@@ -3017,7 +3076,9 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                 <th>Product</th>
                 <th className="money-cell">Total</th>
                 <th className="center-cell">Status</th>
-                {!isCustomer && <th className="number-cell">{isSeller ? 'Payout Status' : 'Download Token'}</th>}
+                <th className="number-cell">
+                  {isSeller ? 'Payout Status' : isCustomer ? 'Access Token' : 'Download Token'}
+                </th>
               </tr>
             </thead>
 
@@ -3029,19 +3090,17 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                   <td>{order.productTitle}</td>
                   <td className="money-cell">{formatMoney(order.totalAmount)}</td>
                   <td className="center-cell">{isAdmin || isCustomer ? renderTextStatus(order.status) : renderStatus(order.status)}</td>
-                  {!isCustomer && (
-                    <td className="number-cell">
-                      {isSeller
-                        ? renderStatus(order.status === 'Completed' ? 'For Payout' : 'Pending')
-                        : order.downloadToken || 'Pending'}
-                    </td>
-                  )}
+                  <td className="number-cell">
+                    {isSeller
+                      ? renderStatus(order.status === 'Completed' ? 'For Payout' : 'Pending')
+                      : order.downloadToken || 'Pending'}
+                  </td>
                 </tr>
               ))}
 
               {paymentRows.length === 0 && (
                 <tr>
-                  <td colSpan={isCustomer ? 5 : 6}>
+                  <td colSpan="6">
                     <div className="empty-state">No payment records match this view.</div>
                   </td>
                 </tr>
@@ -3050,6 +3109,80 @@ export default function Dashboard({ user, userSessionName, activeModule: control
           </table>
         </div>
       </div>
+
+      {(isSeller || isAdmin) && (
+        <div className="panel">
+          <div className="panel-title-row payout-records-header">
+            <div>
+              <h2>{isAdmin ? 'Payout Requests' : 'Payout Request History'}</h2>
+              <p>{isAdmin ? 'Review seller payout requests and release completed payouts.' : 'Track admin review status for submitted payouts.'}</p>
+            </div>
+          </div>
+
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>{isAdmin ? 'Seller' : 'Range'}</th>
+                  <th className="money-cell">Amount</th>
+                  <th>Destination</th>
+                  <th className="center-cell">Status</th>
+                  <th className="number-cell">Requested</th>
+                  <th className="number-cell">Reviewed</th>
+                  {isAdmin && <th>Actions</th>}
+                </tr>
+              </thead>
+
+              <tbody>
+                {payoutRequests.map((request) => {
+                  const payoutStatus = getPayoutStatus(request);
+                  const requestedAt = request.requestedAt || request.RequestedAt;
+                  const reviewedAt = request.reviewedAt || request.ReviewedAt;
+                  const destination = [
+                    request.payoutMethod || request.PayoutMethod || 'GCash',
+                    request.payoutAccountName || request.PayoutAccountName || 'No account name',
+                    request.payoutAccountNumber || request.PayoutAccountNumber || '',
+                  ].filter(Boolean).join(' - ');
+
+                  return (
+                    <tr key={getPayoutId(request)}>
+                      <td>{isAdmin ? getPayoutSellerName(request) : getPayoutDateRange(request)}</td>
+                      <td className="money-cell">{formatMoney(getPayoutAmount(request))}</td>
+                      <td>{destination}</td>
+                      <td className="center-cell">{isAdmin ? renderTextStatus(payoutStatus) : renderStatus(payoutStatus)}</td>
+                      <td className="number-cell">{formatDate(requestedAt)}</td>
+                      <td className="number-cell">{reviewedAt ? formatDate(reviewedAt) : 'Pending'}</td>
+                      {isAdmin && (
+                        <td className="actions payout-status-actions">
+                          {['Approved', 'Released', 'Rejected'].map((status) => (
+                            <button
+                              className={payoutStatus === status ? 'button' : 'button secondary'}
+                              disabled={payoutStatus === status}
+                              key={status}
+                              type="button"
+                              onClick={() => handlePayoutStatus(request, status)}
+                            >
+                              {status}
+                            </button>
+                          ))}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+
+                {payoutRequests.length === 0 && (
+                  <tr>
+                    <td colSpan={isAdmin ? 7 : 6}>
+                      <div className="empty-state">No payout requests yet.</div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
     );
   };
@@ -3941,7 +4074,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
           <p>{activeTicket?.message || 'No message provided.'}</p>
         </div>
 
-        {isSeller && (
+        {(isSeller || isAdmin) && (
           <div className="toolbar modal-actions">
             {['Open', 'In Review', 'Closed'].map((status) => (
               <button
@@ -4112,8 +4245,8 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                   <td>{ticket.productTitle || 'General'}</td>
                   <td>{ticket.priority}</td>
                   <td>
-                    {isCustomer || isAdmin ? (
-                      isAdmin ? renderTextStatus(ticket.status) : renderStatus(ticket.status)
+                    {isCustomer ? (
+                      renderStatus(ticket.status)
                     ) : (
                       <select value={ticket.status} onChange={(e) => handleTicketStatus(ticket, e.target.value)}>
                         <option value="Open">Open</option>

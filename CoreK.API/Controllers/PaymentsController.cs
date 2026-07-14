@@ -76,8 +76,19 @@ namespace CoreK.API.Controllers
                 Status = "Completed"
             };
 
-            _context.Orders.Add(order);
-            await _context.SaveChangesAsync();
+            try
+            {
+                _context.Orders.Add(order);
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex) when (DatabaseErrorHelper.IsMissingStorage(ex))
+            {
+                return StatusCode(503, new { message = "Order storage is still being prepared. Please try again shortly." });
+            }
+            catch (DbUpdateException)
+            {
+                return StatusCode(500, new { message = "Unable to complete checkout. Please try again." });
+            }
 
             var latestVersion = product.Versions
                 .OrderByDescending(v => v.ReleaseDate)
@@ -105,94 +116,101 @@ namespace CoreK.API.Controllers
         [Authorize(Roles = "Admin,Seller,Customer")]
         public async Task<IActionResult> GetOrders([FromQuery] int? customerId)
         {
-            var query = _context.Orders
-                .Include(o => o.Product)
-                .ThenInclude(p => p!.Category)
-                .AsQueryable();
+            try
+            {
+                var query = _context.Orders
+                    .Include(o => o.Product)
+                    .ThenInclude(p => p!.Category)
+                    .AsQueryable();
 
-            if (IsCustomer)
-            {
-                query = query.Where(o => o.CustomerId == CurrentUserId);
-            }
-            else if (IsSeller)
-            {
-                query = query.Where(o => o.Product != null && o.Product.SellerId == CurrentUserId);
-            }
-            else if (customerId.HasValue)
-            {
-                query = query.Where(o => o.CustomerId == customerId.Value);
-            }
-
-            var orderRows = await query
-                .OrderByDescending(o => o.CreatedAt)
-                .Select(o => new
+                if (IsCustomer)
                 {
-                    o.OrderId,
-                    o.CustomerId,
-                    o.CustomerName,
-                    o.CustomerEmail,
-                    o.PaymentMethod,
-                    o.ReferenceNumber,
-                    o.DownloadToken,
-                    o.TotalAmount,
-                    o.Status,
-                    o.CreatedAt,
-                    ProductId = o.ProductId,
-                    ProductTitle = o.Product == null ? "Deleted product" : o.Product.Title,
-                    SellerId = o.Product == null ? (int?)null : o.Product.SellerId,
-                    Category = o.Product == null || o.Product.Category == null
-                        ? "Digital Product"
-                        : o.Product.Category.CategoryName
-                })
-                .ToListAsync();
-
-            var sellerIds = orderRows
-                .Where(o => o.SellerId.HasValue)
-                .Select(o => o.SellerId!.Value)
-                .Distinct()
-                .ToList();
-
-            var sellerProfiles = await _context.Users
-                .AsNoTracking()
-                .Where(u => sellerIds.Contains(u.UserId))
-                .Select(u => new
+                    query = query.Where(o => o.CustomerId == CurrentUserId);
+                }
+                else if (IsSeller)
                 {
-                    u.UserId,
-                    u.FullName,
-                    u.PhoneNumber
-                })
-                .ToDictionaryAsync(u => u.UserId);
+                    query = query.Where(o => o.Product != null && o.Product.SellerId == CurrentUserId);
+                }
+                else if (customerId.HasValue)
+                {
+                    query = query.Where(o => o.CustomerId == customerId.Value);
+                }
 
-            var orders = orderRows.Select(o =>
+                var orderRows = await query
+                    .OrderByDescending(o => o.CreatedAt)
+                    .Select(o => new
+                    {
+                        o.OrderId,
+                        o.CustomerId,
+                        o.CustomerName,
+                        o.CustomerEmail,
+                        o.PaymentMethod,
+                        o.ReferenceNumber,
+                        o.DownloadToken,
+                        o.TotalAmount,
+                        o.Status,
+                        o.CreatedAt,
+                        ProductId = o.ProductId,
+                        ProductTitle = o.Product == null ? "Deleted product" : o.Product.Title,
+                        SellerId = o.Product == null ? (int?)null : o.Product.SellerId,
+                        Category = o.Product == null || o.Product.Category == null
+                            ? "Digital Product"
+                            : o.Product.Category.CategoryName
+                    })
+                    .ToListAsync();
+
+                var sellerIds = orderRows
+                    .Where(o => o.SellerId.HasValue)
+                    .Select(o => o.SellerId!.Value)
+                    .Distinct()
+                    .ToList();
+
+                var sellerProfiles = await _context.Users
+                    .AsNoTracking()
+                    .Where(u => sellerIds.Contains(u.UserId))
+                    .Select(u => new
+                    {
+                        u.UserId,
+                        u.FullName,
+                        u.PhoneNumber
+                    })
+                    .ToDictionaryAsync(u => u.UserId);
+
+                var orders = orderRows.Select(o =>
+                {
+                    var sellerId = o.SellerId ?? 0;
+                    sellerProfiles.TryGetValue(sellerId, out var seller);
+                    var sellerName = seller?.FullName
+                        ?? (sellerId > 0 ? $"Seller #{sellerId}" : "Seller User");
+
+                    return new
+                    {
+                        o.OrderId,
+                        o.CustomerId,
+                        o.CustomerName,
+                        o.CustomerEmail,
+                        o.PaymentMethod,
+                        o.ReferenceNumber,
+                        o.DownloadToken,
+                        o.TotalAmount,
+                        o.Status,
+                        o.CreatedAt,
+                        o.ProductId,
+                        o.ProductTitle,
+                        SellerId = sellerId,
+                        SellerName = sellerName,
+                        SellerPhoneNumber = seller?.PhoneNumber,
+                        SellerProfileName = sellerName,
+                        o.Category
+                    };
+                });
+
+                return Ok(orders);
+            }
+            catch (Exception ex) when (DatabaseErrorHelper.IsMissingStorage(ex))
             {
-                var sellerId = o.SellerId ?? 0;
-                sellerProfiles.TryGetValue(sellerId, out var seller);
-                var sellerName = seller?.FullName
-                    ?? (sellerId > 0 ? $"Seller #{sellerId}" : "Seller User");
-
-                return new
-                {
-                    o.OrderId,
-                    o.CustomerId,
-                    o.CustomerName,
-                    o.CustomerEmail,
-                    o.PaymentMethod,
-                    o.ReferenceNumber,
-                    o.DownloadToken,
-                    o.TotalAmount,
-                    o.Status,
-                    o.CreatedAt,
-                    o.ProductId,
-                    o.ProductTitle,
-                    SellerId = sellerId,
-                    SellerName = sellerName,
-                    SellerPhoneNumber = seller?.PhoneNumber,
-                    SellerProfileName = sellerName,
-                    o.Category
-                };
-            });
-
-            return Ok(orders);
+                return Ok(Array.Empty<object>());
+            }
         }
 
         [HttpGet("payouts")]
@@ -264,6 +282,16 @@ namespace CoreK.API.Controllers
                 return Conflict(new { message = "You already have a payout request pending admin review." });
             }
 
+            var hasDuplicateActiveRange = await _context.PayoutRequests.AnyAsync(p =>
+                p.SellerId == CurrentUserId &&
+                p.RangeStart == startDate &&
+                p.RangeEnd == endDate &&
+                p.Status != "Rejected");
+            if (hasDuplicateActiveRange)
+            {
+                return Conflict(new { message = "A payout request for this date range already exists." });
+            }
+
             var completedOrdersQuery = _context.Orders
                 .Include(o => o.Product)
                 .Where(o => o.Product != null &&
@@ -308,6 +336,10 @@ namespace CoreK.API.Controllers
             catch (Exception ex) when (DatabaseErrorHelper.IsMissingStorage(ex))
             {
                 return StatusCode(503, new { message = "Payout storage is still being prepared. Please try again shortly." });
+            }
+            catch (DbUpdateException)
+            {
+                return StatusCode(500, new { message = "Unable to save the payout request. Please try again." });
             }
 
             return Ok(new
