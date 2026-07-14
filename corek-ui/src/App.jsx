@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Download, LayoutDashboard, LifeBuoy, Package, UserCog } from 'lucide-react';
+import { BarChart3, CreditCard, Download, LayoutDashboard, LifeBuoy, Package, UserCog } from 'lucide-react';
 import LandingPage from './pages/LandingPage';
 import AuthModal from './components/AuthModal';
 import Dashboard from './pages/Dashboard';
@@ -11,6 +11,20 @@ const CUSTOMER_NAV_ITEMS = [
   { id: 'support', label: 'Support', icon: LifeBuoy },
   { id: 'profile', label: 'Profile', icon: UserCog },
 ];
+
+const SELLER_NAV_ITEMS = [
+  { id: 'overview', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'products', label: 'Listings', icon: Package },
+  { id: 'payments', label: 'Payouts', icon: CreditCard },
+  { id: 'reports', label: 'Reports', icon: BarChart3 },
+  { id: 'support', label: 'Support', icon: LifeBuoy },
+  { id: 'profile', label: 'Settings', icon: UserCog },
+];
+
+const HEADER_NAV_ITEMS_BY_ROLE = {
+  Customer: CUSTOMER_NAV_ITEMS,
+  Seller: SELLER_NAV_ITEMS,
+};
 
 export default function App() {
   const savedUser = useMemo(() => {
@@ -29,10 +43,11 @@ export default function App() {
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [sessionUser, setSessionUser] = useState(savedUser);
-  const [activeCustomerModule, setActiveCustomerModule] = useState('overview');
+  const [activeDashboardModule, setActiveDashboardModule] = useState('overview');
   const isAuthenticated = Boolean(sessionUser);
   const sessionRole = sessionUser?.role || sessionUser?.Role || 'Customer';
-  const isCustomerSession = isAuthenticated && sessionRole === 'Customer';
+  const headerNavItems = isAuthenticated ? HEADER_NAV_ITEMS_BY_ROLE[sessionRole] : null;
+  const usesHeaderNav = Boolean(headerNavItems);
 
   // Smoothly invokes modal initialization pipelines
   const handleOpenAuthModal = () => {
@@ -47,7 +62,7 @@ export default function App() {
   const handleLoginSuccess = (user) => {
     const nextUser = user || { userId: 1, fullName: 'CoreK User', role: 'Customer' };
     setSessionUser(nextUser);
-    setActiveCustomerModule('overview');
+    setActiveDashboardModule('overview');
     localStorage.setItem('corek_user', JSON.stringify(nextUser));
     setIsAuthModalOpen(false);
   };
@@ -55,7 +70,7 @@ export default function App() {
   // Safely destroys state token context parameters for session logout
   const handleLogout = useCallback(() => {
     setSessionUser(null);
-    setActiveCustomerModule('overview');
+    setActiveDashboardModule('overview');
     localStorage.removeItem('corek_user');
     localStorage.removeItem('sys_auth_token');
   }, []);
@@ -76,21 +91,21 @@ export default function App() {
           <div style={styles.logoIcon}></div>
           <span style={styles.logoText}>CoreK</span>
         </div>
-        {isCustomerSession ? (
-          <nav className="customer-header-nav" style={styles.customerHeaderNav} aria-label="Customer navigation">
-            {CUSTOMER_NAV_ITEMS.map((item) => {
+        {usesHeaderNav ? (
+          <nav className="customer-header-nav" style={styles.customerHeaderNav} aria-label={`${sessionRole} navigation`}>
+            {headerNavItems.map((item) => {
               const Icon = item.icon;
 
               return (
                 <button
                   key={item.id}
-                  className={`customer-header-nav-button ${activeCustomerModule === item.id ? 'active' : ''}`}
+                  className={`customer-header-nav-button ${activeDashboardModule === item.id ? 'active' : ''}`}
                   type="button"
                   style={{
                     ...styles.customerHeaderNavItem,
-                    ...(activeCustomerModule === item.id ? styles.customerHeaderNavItemActive : {})
+                    ...(activeDashboardModule === item.id ? styles.customerHeaderNavItemActive : {})
                   }}
-                  onClick={() => setActiveCustomerModule(item.id)}
+                  onClick={() => setActiveDashboardModule(item.id)}
                 >
                   <Icon size={16} />
                   <span>{item.label}</span>
@@ -130,8 +145,8 @@ export default function App() {
           <Dashboard
             user={sessionUser}
             onLogout={handleLogout}
-            activeModule={isCustomerSession ? activeCustomerModule : undefined}
-            onActiveModuleChange={isCustomerSession ? setActiveCustomerModule : undefined}
+            activeModule={usesHeaderNav ? activeDashboardModule : undefined}
+            onActiveModuleChange={usesHeaderNav ? setActiveDashboardModule : undefined}
           />
         )}
       </div>

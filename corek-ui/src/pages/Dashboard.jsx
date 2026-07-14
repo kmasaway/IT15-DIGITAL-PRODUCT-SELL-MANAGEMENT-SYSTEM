@@ -93,7 +93,7 @@ const roleConfigs = {
   Seller: {
     className: 'role-seller',
     modules: ['overview', 'products', 'payments', 'reports', 'support', 'profile'],
-    moduleLabels: { products: 'Listings', payments: 'Payouts' },
+    moduleLabels: { products: 'Listings', payments: 'Payouts', profile: 'Settings' },
   },
   Customer: {
     className: 'role-customer',
@@ -1534,7 +1534,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       const result = await api.updateProfile(userId, profile);
       const nextUser = result.user || {};
       localStorage.setItem('corek_user', JSON.stringify(nextUser));
-      showNotice('Profile saved.');
+      showNotice(isSeller ? 'Settings saved.' : 'Profile saved.');
       await loadDashboard();
     } catch (err) {
       showError(err.message);
@@ -2666,20 +2666,20 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     if (isSeller) {
       return (
         <div className="module-stack">
-          <div className="panel report-export-panel">
+          <div className="panel report-export-panel seller-report-export-panel">
             <div>
               <h2>Reports Export</h2>
               <p>Export the current analytics view as a browser-generated PDF.</p>
             </div>
 
-            <button className="button" type="button" onClick={handleExportReportsPdf}>
-              Export PDF
-              <Download size={16} />
-            </button>
-          </div>
+            <div className="seller-report-export-actions">
+              {renderSellerDateFilter('', { plain: true, compact: true, controlsOnly: true })}
 
-          <div className="seller-reports-filter-row">
-            {renderSellerDateFilter('', { plain: true, compact: true, controlsOnly: true })}
+              <button className="button" type="button" onClick={handleExportReportsPdf}>
+                Export PDF
+                <Download size={16} />
+              </button>
+            </div>
           </div>
 
           <div className="grid-3 seller-report-metrics">
@@ -3015,7 +3015,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
         className={`panel ${isSeller ? 'seller-profile-form' : ''} ${isCustomer ? 'customer-profile-form' : ''}`}
         onSubmit={handleProfileSubmit}
       >
-        <h2>Profile and Payout Details</h2>
+        <h2>{isSeller ? 'Account Settings' : 'Profile and Payout Details'}</h2>
 
         <div className="form-grid">
           <div className="field">
@@ -3513,7 +3513,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       products: ['', ''],
       payments: ['Payout Activity', 'Monitor buyer orders, delivery access, and checkout references.'],
       reports: ['', ''],
-      profile: ['Seller Profile', 'Maintain storefront details and payout account settings.'],
+      profile: ['Account Settings', 'Maintain storefront details and payout account settings.'],
       support: ['Buyer Support', 'Respond to product and order issues connected to your listings.'],
     },
     Customer: {
@@ -3553,7 +3553,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
 
   return (
     <div className={`dashboard-shell ${roleConfig.className} module-${activeRoleModule}`}>
-      {!isCustomer && (
+      {isAdmin && (
       <aside className="dashboard-sidebar">
         <div className="dashboard-user">
           <strong>{displayName}</strong>

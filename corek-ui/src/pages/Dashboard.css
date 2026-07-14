@@ -49,6 +49,7 @@
   -ms-overflow-style: none;
 }
 
+.dashboard-shell.role-seller,
 .dashboard-shell.role-customer {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -203,6 +204,7 @@
   scrollbar-gutter: stable;
 }
 
+.role-seller .dashboard-content,
 .role-customer .dashboard-content {
   padding-left: var(--app-page-x-padding);
   padding-right: var(--app-page-x-padding);
@@ -1786,6 +1788,35 @@
   min-width: 0;
 }
 
+.seller-report-export-panel {
+  align-items: flex-start;
+}
+
+.seller-report-export-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.seller-report-export-actions .date-filter-controls {
+  align-items: end;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.seller-report-export-actions .date-filter-controls label {
+  width: 136px;
+}
+
+.seller-report-export-actions .date-filter-controls input,
+.seller-date-filter-controls-only.seller-date-filter-compact .date-filter-controls input {
+  background: transparent;
+  width: 100%;
+  min-width: 0;
+}
+
 .panel-title-row > svg {
   color: var(--core-teal);
   flex-shrink: 0;
@@ -2527,6 +2558,7 @@ input[type='number'] {
     padding: 18px;
   }
 
+  .role-seller .dashboard-content,
   .role-customer .dashboard-content {
     padding-left: 18px;
     padding-right: 18px;
@@ -2675,6 +2707,7 @@ input[type='number'] {
 
   .seller-sales-graph-header .date-filter-controls,
   .seller-recent-orders-header .date-filter-controls,
+  .seller-report-export-actions .date-filter-controls,
   .payout-records-header .date-filter-controls {
     justify-content: stretch;
     width: 100%;
@@ -2682,6 +2715,7 @@ input[type='number'] {
 
   .seller-sales-graph-header .date-filter-controls label,
   .seller-recent-orders-header .date-filter-controls label,
+  .seller-report-export-actions .date-filter-controls label,
   .payout-records-header .date-filter-controls label {
     flex: 1 1 0;
     width: auto;
@@ -2732,6 +2766,12 @@ input[type='number'] {
   .identity-card {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .seller-report-export-actions {
+    align-items: stretch;
+    margin-left: 0;
+    width: 100%;
   }
 
   .identity-card-actions,
