@@ -1,0 +1,71 @@
+name: Deploy to MonsterASP
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build React
+        working-directory: corek-ui
+        run: |
+          npm ci
+          npm run build
+
+      - name: Copy React build to ASP.NET wwwroot
+        shell: pwsh
+        run: |
+          Copy-Item -Path corek-ui/dist/* -Destination CoreK.API/wwwroot -Recurse -Force
+
+      - name: Create production config
+        shell: pwsh
+        run: |
+          $config = @{
+            ConnectionStrings = @{
+              DefaultConnection = "${{ secrets.DB_CONNECTION_STRING }}"
+            }
+            AppSettings = @{
+              TokenSecret = "${{ secrets.TOKEN_SECRET }}"
+            }
+            Cors = @{
+              AllowedOrigins = @(
+                "https://corek.runasp.net",
+                "http://corek.runasp.net"
+              )
+            }
+            AllowedHosts = "*"
+          }
+
+          $config | ConvertTo-Json -Depth 10 | Set-Content CoreK.API/appsettings.Production.json
+
+      - name: Publish ASP.NET Core
+        run: dotnet publish CoreK.API/CoreK.API.csproj -c Release -o publish-monsterasp -p:UseAppHost=false
+
+      - name: Deploy to MonsterASP
+        shell: pwsh
+        run: |
+          $msdeploy = "C:\Program Files\IIS\Microsoft Web Deploy V3\msdeploy.exe"
+
+          & $msdeploy `
+            -verb:sync `
+            "-source:contentPath='publish-monsterasp'" `
+            "-dest:contentPath='${{ secrets.MONSTERASP_SITE_NAME }}',computerName='https://${{ secrets.MONSTERASP_PUBLISH_URL }}:8172/msdeploy.axd?site=${{ secrets.MONSTERASP_SITE_NAME }}',userName='${{ secrets.MONSTERASP_USERNAME }}',password='${{ secrets.MONSTERASP_PASSWORD }}',authType='Basic'" `
+            -allowUntrusted `
+            -enableRule:AppOffline

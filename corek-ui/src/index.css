@@ -1,4 +1,6 @@
 html, body, #root {
+  --app-page-x-padding: clamp(96px, 9vw, 168px);
+
   margin: 0;
   padding: 0;
   width: 100%;
@@ -115,4 +117,14 @@ input:focus {
 
 .animate-glow {
   animation: ambientGlow 8s ease-in-out infinite;
+}
+
+.landing-main {
+  max-width: none !important;
+}
+
+@media (max-width: 760px) {
+  html, body, #root {
+    --app-page-x-padding: 18px;
+  }
 }

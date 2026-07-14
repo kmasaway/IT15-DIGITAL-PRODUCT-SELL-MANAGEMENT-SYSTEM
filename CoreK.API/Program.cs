@@ -29,7 +29,13 @@ var reactCorsPolicy = "_reactCorsPolicy";
 
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(connectionString));
+    options.UseSqlServer(connectionString, sqlOptions =>
+    {
+        sqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 5,
+            maxRetryDelay: TimeSpan.FromSeconds(10),
+            errorNumbersToAdd: null);
+    }));
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
@@ -79,10 +85,12 @@ if (app.Environment.IsDevelopment())
 app.UseCors(reactCorsPolicy);
 
 app.UseHttpsRedirection();
+app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapFallbackToFile("index.html");
 
 app.Run();
 

@@ -51,7 +51,7 @@ export default function LandingPage({ onOpenAuthModal }) {
   };
 
   return (
-    <main style={styles.main} className="animate-fade-up">
+    <main style={styles.main} className="landing-main animate-fade-up">
       {/* --- HERO SECTION --- */}
       <div style={styles.heroGrid}>
         <div style={styles.heroLeft}>
@@ -430,8 +430,8 @@ export default function LandingPage({ onOpenAuthModal }) {
 
 const styles = {
   main: {
-    padding: '4rem 2rem 8rem 2rem',
-    maxWidth: '1440px',
+    padding: '4rem var(--app-page-x-padding) 8rem',
+    maxWidth: 'none',
     margin: '0 auto',
     width: '100%',
     boxSizing: 'border-box',

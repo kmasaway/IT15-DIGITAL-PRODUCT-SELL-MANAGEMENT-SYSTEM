@@ -204,8 +204,8 @@
 }
 
 .role-customer .dashboard-content {
-  padding-left: clamp(96px, 9vw, 168px);
-  padding-right: clamp(96px, 9vw, 168px);
+  padding-left: var(--app-page-x-padding);
+  padding-right: var(--app-page-x-padding);
 }
 
 .dashboard-shell.role-customer.module-overview .dashboard-content,

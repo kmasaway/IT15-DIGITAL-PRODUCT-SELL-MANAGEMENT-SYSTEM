@@ -1525,10 +1525,8 @@ C:\Users\Keanu\IT15-DIGITAL-PRODUCT-SELL-MANAGEMENT-SYSTEM\CoreK.API\bin\CodexCh
 C:\Users\Keanu\IT15-DIGITAL-PRODUCT-SELL-MANAGEMENT-SYSTEM\CoreK.API\bin\CodexCheck\runtimes\win\lib\net6.0\System.Security.Cryptography.ProtectedData.dll
 C:\Users\Keanu\IT15-DIGITAL-PRODUCT-SELL-MANAGEMENT-SYSTEM\CoreK.API\bin\CodexCheck\runtimes\win\lib\net6.0\System.Windows.Extensions.dll
 C:\Users\Keanu\IT15-DIGITAL-PRODUCT-SELL-MANAGEMENT-SYSTEM\CoreK.API\bin\CheckBuild\Microsoft.AspNetCore.Authentication.JwtBearer.dll
-C:\Users\Keanu\IT15-DIGITAL-PRODUCT-SELL-MANAGEMENT-SYSTEM\CoreK.API\bin\Debug\net9.0\appsettings.Production.json
 C:\Users\Keanu\IT15-DIGITAL-PRODUCT-SELL-MANAGEMENT-SYSTEM\CoreK.API\bin\VerifyBuild\appsettings.Development.json
 C:\Users\Keanu\IT15-DIGITAL-PRODUCT-SELL-MANAGEMENT-SYSTEM\CoreK.API\bin\VerifyBuild\appsettings.json
-C:\Users\Keanu\IT15-DIGITAL-PRODUCT-SELL-MANAGEMENT-SYSTEM\CoreK.API\bin\VerifyBuild\appsettings.Production.json
 C:\Users\Keanu\IT15-DIGITAL-PRODUCT-SELL-MANAGEMENT-SYSTEM\CoreK.API\bin\VerifyBuild\CoreK.API.staticwebassets.runtime.json
 C:\Users\Keanu\IT15-DIGITAL-PRODUCT-SELL-MANAGEMENT-SYSTEM\CoreK.API\bin\VerifyBuild\CoreK.API.staticwebassets.endpoints.json
 C:\Users\Keanu\IT15-DIGITAL-PRODUCT-SELL-MANAGEMENT-SYSTEM\CoreK.API\bin\VerifyBuild\CoreK.API.deps.json

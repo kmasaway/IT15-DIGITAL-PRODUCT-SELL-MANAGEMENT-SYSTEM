@@ -1,4 +1,10 @@
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5132/api';
+const localHosts = new Set(['localhost', '127.0.0.1', '::1']);
+const defaultApiBaseUrl =
+  typeof window !== 'undefined' && localHosts.has(window.location.hostname)
+    ? 'http://localhost:5132/api'
+    : '/api';
+
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || defaultApiBaseUrl;
 
 async function parseResponse(response, path = '') {
   const text = await response.text();

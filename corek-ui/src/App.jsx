@@ -163,7 +163,7 @@ const styles = {
     gridTemplateColumns: 'minmax(120px, 1fr) auto minmax(120px, 1fr)',
     alignItems: 'center',
     gap: '1rem',
-    padding: '1rem clamp(96px, 9vw, 168px)',
+    padding: '1rem var(--app-page-x-padding)',
     borderBottom: '1px solid #e2efe9',
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     backdropFilter: 'blur(12px)',

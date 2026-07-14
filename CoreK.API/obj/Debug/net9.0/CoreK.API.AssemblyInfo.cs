@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("CoreK.API")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+2e4c51a5192936d35fc50e94e0773c5c9ef7bd27")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c3c53603e526ef9a9ef821c3a5a7972a9e409434")]
 [assembly: System.Reflection.AssemblyProductAttribute("CoreK.API")]
 [assembly: System.Reflection.AssemblyTitleAttribute("CoreK.API")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
