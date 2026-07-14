@@ -1720,7 +1720,6 @@ export default function Dashboard({ user, userSessionName, activeModule: control
             )),
           ]);
           showNotice('Requested to Sell', 'Your request is now shown in the Product Listings table for admin validation.');
-          setNotice('');
         } else {
           showNotice('Product uploaded with initial version.');
         }
@@ -2283,8 +2282,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
             <div className="field">
               <label>Digital Content</label>
               <div className="content-upload-grid single">
-                <label>
-                  <span>Image</span>
+                <label aria-label="Upload product image">
                   <input
                     type="file"
                     accept="image/*"
@@ -2304,7 +2302,6 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                     ) : (
                       <div className="upload-preview-file">{productForm.coverPhotoFile.name}</div>
                     )}
-                    <span className="upload-preview-label">Image</span>
                     <button
                       className="upload-preview-remove"
                       type="button"

@@ -35,13 +35,39 @@ namespace CoreK.API.Controllers
 
             if (product == null) return NotFound("Product is not available for checkout.");
 
+            var customerId = IsAdmin && dto.CustomerId > 0 ? dto.CustomerId : CurrentUserId;
+            if (customerId <= 0)
+            {
+                return Unauthorized(new { message = "Your customer session could not be verified. Please sign in again." });
+            }
+
+            var customer = await _context.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.UserId == customerId);
+            if (customer == null)
+            {
+                return BadRequest(new { message = "Customer account was not found." });
+            }
+
+            var customerName = string.IsNullOrWhiteSpace(dto.CustomerName)
+                ? customer.FullName.Trim()
+                : dto.CustomerName.Trim();
+            var customerEmail = string.IsNullOrWhiteSpace(dto.CustomerEmail)
+                ? customer.Email.Trim()
+                : dto.CustomerEmail.Trim();
+
+            if (string.IsNullOrWhiteSpace(customerName) || string.IsNullOrWhiteSpace(customerEmail))
+            {
+                return BadRequest(new { message = "Customer name and email are required for checkout." });
+            }
+
             var referenceNumber = $"CK-{DateTime.UtcNow:yyyyMMddHHmmss}-{Random.Shared.Next(1000, 9999)}";
             var order = new Order
             {
-                CustomerId = IsAdmin && dto.CustomerId > 0 ? dto.CustomerId : CurrentUserId,
+                CustomerId = customerId,
                 ProductId = product.ProductId,
-                CustomerName = dto.CustomerName.Trim(),
-                CustomerEmail = dto.CustomerEmail.Trim(),
+                CustomerName = customerName,
+                CustomerEmail = customerEmail,
                 PaymentMethod = string.IsNullOrWhiteSpace(dto.PaymentMethod) ? "GCash" : dto.PaymentMethod.Trim(),
                 PayMongoPaymentIntentId = $"paymongo_mock_{Guid.NewGuid():N}",
                 ReferenceNumber = referenceNumber,

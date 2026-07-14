@@ -1,4 +1,5 @@
 using CoreK.API.Data;
+using CoreK.API.Controllers;
 using CoreK.API.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -75,6 +76,7 @@ using (var scope = app.Services.CreateScope())
     EnsureSellerAccountTables(db, app.Logger);
     SeedMarketplaceCategories(db);
     SeedAdminAccount(db, app.Configuration);
+    RemoveKnownTestAccounts(db, app.Logger);
 }
 
 if (app.Environment.IsDevelopment())
@@ -138,6 +140,64 @@ static void SeedAdminAccount(AppDbContext db, IConfiguration configuration)
 
     db.Users.Add(admin);
     db.SaveChanges();
+}
+
+static void RemoveKnownTestAccounts(AppDbContext db, ILogger logger)
+{
+    var testEmails = new[]
+    {
+        "codex-check-20260708092139@example.test"
+    };
+
+    foreach (var email in testEmails)
+    {
+        try
+        {
+            var user = db.Users.FirstOrDefault(user => user.Email == email);
+            if (user == null)
+            {
+                continue;
+            }
+
+            var userId = user.UserId;
+            var productIds = db.Products
+                .Where(product => product.SellerId == userId)
+                .Select(product => product.ProductId)
+                .ToList();
+            var orderIds = db.Orders
+                .Where(order => order.CustomerId == userId || productIds.Contains(order.ProductId))
+                .Select(order => order.OrderId)
+                .ToList();
+
+            db.ChatMessages.RemoveRange(db.ChatMessages.Where(message =>
+                message.SellerId == userId ||
+                message.CustomerId == userId ||
+                message.SenderId == userId ||
+                (message.ProductId.HasValue && productIds.Contains(message.ProductId.Value))));
+            db.SupportTickets.RemoveRange(db.SupportTickets.Where(ticket =>
+                ticket.CustomerId == userId ||
+                (ticket.ProductId.HasValue && productIds.Contains(ticket.ProductId.Value)) ||
+                (ticket.OrderId.HasValue && orderIds.Contains(ticket.OrderId.Value))));
+            db.PayoutRequests.RemoveRange(db.PayoutRequests.Where(request => request.SellerId == userId));
+            db.SellerSubscriptions.RemoveRange(db.SellerSubscriptions.Where(subscription => subscription.SellerId == userId));
+            db.ValidIdSubmissions.RemoveRange(db.ValidIdSubmissions.Where(submission => submission.UserId == userId));
+            db.Orders.RemoveRange(db.Orders.Where(order => orderIds.Contains(order.OrderId)));
+            db.ProductVersions.RemoveRange(db.ProductVersions.Where(version => productIds.Contains(version.ProductId)));
+            db.Products.RemoveRange(db.Products.Where(product => productIds.Contains(product.ProductId)));
+            db.Users.Remove(user);
+            db.SaveChanges();
+
+            logger.LogInformation("Removed known test account {Email}.", email);
+        }
+        catch (Exception ex) when (DatabaseErrorHelper.IsMissingStorage(ex))
+        {
+            logger.LogWarning(ex, "Known test account cleanup skipped because operational tables are still being prepared.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Known test account cleanup failed for {Email}.", email);
+        }
+    }
 }
 
 static void EnsureSellerAccountTables(AppDbContext db, ILogger logger)

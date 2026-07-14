@@ -28,7 +28,15 @@ async function parseResponse(response, path = '') {
       throw new Error('Your session expired. Please log in again.');
     }
 
-    const message = payload?.message || payload || `Request failed with status ${response.status}`;
+    const validationMessage = payload?.errors
+      ? Object.values(payload.errors).flat().join(' ')
+      : '';
+    const message =
+      payload?.message ||
+      validationMessage ||
+      payload?.title ||
+      (typeof payload === 'string' ? payload : '') ||
+      `Request failed with status ${response.status}`;
     throw new Error(message);
   }
 

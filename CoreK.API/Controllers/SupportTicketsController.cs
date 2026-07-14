@@ -80,20 +80,64 @@ namespace CoreK.API.Controllers
         [Authorize(Roles = "Admin,Seller,Customer")]
         public async Task<IActionResult> CreateTicket([FromBody] CreateSupportTicketDto dto)
         {
-            if (dto.ProductId.HasValue)
+            var customerId = IsAdmin && dto.CustomerId > 0 ? dto.CustomerId : CurrentUserId;
+            if (customerId <= 0)
             {
-                var productExists = await _context.Products.AnyAsync(p => p.ProductId == dto.ProductId.Value);
-                if (!productExists) return BadRequest("Selected product does not exist.");
+                return Unauthorized(new { message = "Your account session could not be verified. Please sign in again." });
             }
+
+            var customer = await _context.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.UserId == customerId);
+            if (customer == null)
+            {
+                return BadRequest("Customer account was not found.");
+            }
+
+            var ticketProductId = dto.ProductId;
 
             if (dto.OrderId.HasValue)
             {
-                var orderExists = await _context.Orders.AnyAsync(o => o.OrderId == dto.OrderId.Value);
-                if (!orderExists) return BadRequest("Selected order does not exist.");
+                var order = await _context.Orders
+                    .Include(o => o.Product)
+                    .FirstOrDefaultAsync(o => o.OrderId == dto.OrderId.Value);
+                if (order == null) return BadRequest("Selected order does not exist.");
+
+                if (IsCustomer && order.CustomerId != CurrentUserId)
+                {
+                    return Forbid();
+                }
+
+                if (IsSeller && (order.Product == null || order.Product.SellerId != CurrentUserId))
+                {
+                    return Forbid();
+                }
+
+                if (ticketProductId.HasValue && ticketProductId.Value != order.ProductId)
+                {
+                    return BadRequest("Selected product does not match the selected order.");
+                }
+
+                ticketProductId = order.ProductId;
             }
 
-            var customerName = dto.CustomerName?.Trim() ?? string.Empty;
-            var customerEmail = dto.CustomerEmail?.Trim() ?? string.Empty;
+            if (ticketProductId.HasValue)
+            {
+                var product = await _context.Products.FirstOrDefaultAsync(p => p.ProductId == ticketProductId.Value);
+                if (product == null) return BadRequest("Selected product does not exist.");
+
+                if (IsSeller && product.SellerId != CurrentUserId)
+                {
+                    return Forbid();
+                }
+            }
+
+            var customerName = string.IsNullOrWhiteSpace(dto.CustomerName)
+                ? customer.FullName.Trim()
+                : dto.CustomerName.Trim();
+            var customerEmail = string.IsNullOrWhiteSpace(dto.CustomerEmail)
+                ? customer.Email.Trim()
+                : dto.CustomerEmail.Trim();
             var subject = dto.Subject?.Trim() ?? string.Empty;
             var message = dto.Message?.Trim() ?? string.Empty;
             var priority = string.IsNullOrWhiteSpace(dto.Priority) ? "Normal" : dto.Priority.Trim();
@@ -108,8 +152,8 @@ namespace CoreK.API.Controllers
 
             var ticket = new SupportTicket
             {
-                CustomerId = IsAdmin && dto.CustomerId > 0 ? dto.CustomerId : CurrentUserId,
-                ProductId = dto.ProductId,
+                CustomerId = customerId,
+                ProductId = ticketProductId,
                 OrderId = dto.OrderId,
                 CustomerName = customerName,
                 CustomerEmail = customerEmail,

@@ -280,11 +280,12 @@ namespace CoreK.API.Controllers
                 return BadRequest("Product title and description are required.");
             }
 
-            await using var transaction = await _context.Database.BeginTransactionAsync();
             string? savedFilePath = null;
 
             try
             {
+                savedFilePath = await SaveUploadedAsset(uploadedFile);
+
                 var product = new Product
                 {
                     SellerId = sellerId,
@@ -292,25 +293,20 @@ namespace CoreK.API.Controllers
                     Title = title,
                     Description = description,
                     Price = productDto.Price,
-                    IsActive = IsAdmin
+                    IsActive = IsAdmin,
+                    Versions =
+                    [
+                        new ProductVersion
+                        {
+                            VersionNumber = "1.0.0",
+                            Changelog = "Initial Release Asset.",
+                            SecureFilePath = savedFilePath
+                        }
+                    ]
                 };
 
                 _context.Products.Add(product);
-                await _context.SaveChangesAsync(); // Saves product first to generate its unique ProductId
-
-                savedFilePath = await SaveUploadedAsset(uploadedFile);
-
-                var initialVersion = new ProductVersion
-                {
-                    ProductId = product.ProductId,
-                    VersionNumber = "1.0.0",
-                    Changelog = "Initial Release Asset.",
-                    SecureFilePath = savedFilePath
-                };
-
-                _context.ProductVersions.Add(initialVersion);
                 await _context.SaveChangesAsync();
-                await transaction.CommitAsync();
 
                 return Ok(new
                 {
@@ -341,17 +337,17 @@ namespace CoreK.API.Controllers
                     }
                 });
             }
+            catch (Exception ex) when (DatabaseErrorHelper.IsMissingStorage(ex))
+            {
+                TryDeleteFile(savedFilePath);
+                Console.WriteLine($">>> PRODUCT UPLOAD STORAGE ERROR: {ex.Message}");
+                return StatusCode(503, new { message = "Product storage is still being prepared. Please try again shortly." });
+            }
             catch (Exception ex)
             {
-                await transaction.RollbackAsync();
-
-                if (!string.IsNullOrWhiteSpace(savedFilePath) && System.IO.File.Exists(savedFilePath))
-                {
-                    System.IO.File.Delete(savedFilePath);
-                }
-
+                TryDeleteFile(savedFilePath);
                 Console.WriteLine($">>> PRODUCT UPLOAD ERROR: {ex.Message}");
-                return StatusCode(500, "Unable to submit the product listing. Please try again.");
+                return StatusCode(500, new { message = "Unable to submit the product listing. Please try again." });
             }
         }
 
@@ -406,28 +402,55 @@ namespace CoreK.API.Controllers
 
         [HttpPost("{productId}/add-version")]
         [Authorize(Roles = "Admin,Seller")]
-        public async Task<IActionResult> AddNewVersion(int productId, [FromForm] AddVersionDto versionDto, IFormFile? file)
+        public async Task<IActionResult> AddNewVersion(int productId, [FromForm] AddVersionDto versionDto, [FromForm(Name = "file")] IFormFile? file)
         {
             var product = await _context.Products.FindAsync(productId);
             if (product == null) return NotFound("Product listing not found.");
             if (!IsAdmin && product.SellerId != CurrentUserId) return Forbid();
 
-            if (file == null || file.Length == 0) return BadRequest("Updated file asset must be provided.");
+            var uploadedFile = file
+                ?? Request.Form.Files.GetFile("file")
+                ?? Request.Form.Files.FirstOrDefault();
 
-            string filePath = await SaveUploadedAsset(file);
+            if (uploadedFile == null || uploadedFile.Length == 0) return BadRequest("Updated file asset must be provided.");
 
-            var newVersion = new ProductVersion
+            var versionNumber = versionDto.VersionNumber?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(versionNumber))
             {
-                ProductId = productId,
-                VersionNumber = versionDto.VersionNumber,
-                Changelog = versionDto.Changelog,
-                SecureFilePath = filePath
-            };
+                return BadRequest("Version number is required.");
+            }
 
-            _context.ProductVersions.Add(newVersion);
-            await _context.SaveChangesAsync();
+            string? filePath = null;
 
-            return Ok(new { message = $"Version {versionDto.VersionNumber} pushed successfully!" });
+            try
+            {
+                filePath = await SaveUploadedAsset(uploadedFile);
+
+                var newVersion = new ProductVersion
+                {
+                    ProductId = productId,
+                    VersionNumber = versionNumber,
+                    Changelog = versionDto.Changelog?.Trim(),
+                    SecureFilePath = filePath
+                };
+
+                _context.ProductVersions.Add(newVersion);
+                await _context.SaveChangesAsync();
+
+                return Ok(new { message = $"Version {versionNumber} pushed successfully!" });
+            }
+            catch (Exception ex) when (DatabaseErrorHelper.IsMissingStorage(ex))
+            {
+                TryDeleteFile(filePath);
+                Console.WriteLine($">>> PRODUCT VERSION STORAGE ERROR: {ex.Message}");
+                return StatusCode(503, new { message = "Product version storage is still being prepared. Please try again shortly." });
+            }
+            catch (Exception ex)
+            {
+                TryDeleteFile(filePath);
+                Console.WriteLine($">>> PRODUCT VERSION ERROR: {ex.Message}");
+                return StatusCode(500, new { message = "Unable to push the product version. Please try again." });
+            }
         }
 
         private async Task<Dictionary<int, SellerProfile>> GetSellerProfiles(IEnumerable<int> sellerIds)
@@ -468,6 +491,23 @@ namespace CoreK.API.Controllers
             }
 
             return filePath;
+        }
+
+        private static void TryDeleteFile(string? filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath) || !System.IO.File.Exists(filePath))
+            {
+                return;
+            }
+
+            try
+            {
+                System.IO.File.Delete(filePath);
+            }
+            catch
+            {
+                // Best-effort cleanup only; the API response should still reflect the original failure.
+            }
         }
 
         private static string? GetPublicAssetUrl(string? filePath)
