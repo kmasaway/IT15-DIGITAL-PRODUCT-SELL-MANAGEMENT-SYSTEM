@@ -58,18 +58,6 @@ namespace CoreK.API.Controllers
                     p.Price,
                     p.IsActive,
                     p.CreatedAt,
-                    SellerName = _context.Users
-                        .Where(u => u.UserId == p.SellerId)
-                        .Select(u => u.FullName)
-                        .FirstOrDefault(),
-                    SellerPhoneNumber = _context.Users
-                        .Where(u => u.UserId == p.SellerId)
-                        .Select(u => u.PhoneNumber)
-                        .FirstOrDefault(),
-                    SellerProfileName = _context.Users
-                        .Where(u => u.UserId == p.SellerId)
-                        .Select(u => u.FullName)
-                        .FirstOrDefault(),
                     Category = p.Category == null ? "Digital Product" : p.Category.CategoryName,
                     CategoryName = p.Category == null ? "Digital Product" : p.Category.CategoryName,
                     VersionCount = p.Versions.Count,
@@ -93,26 +81,33 @@ namespace CoreK.API.Controllers
                 })
                 .ToListAsync();
 
-            return Ok(products.Select(p => new
+            var sellerProfiles = await GetSellerProfiles(products.Select(p => p.SellerId));
+
+            return Ok(products.Select(p =>
             {
-                p.ProductId,
-                p.SellerId,
-                p.CategoryId,
-                p.Title,
-                p.Description,
-                p.Price,
-                p.IsActive,
-                p.CreatedAt,
-                p.SellerName,
-                p.SellerPhoneNumber,
-                p.SellerProfileName,
-                p.Category,
-                p.CategoryName,
-                p.VersionCount,
-                p.LatestVersion,
-                ThumbnailUrl = GetPublicAssetUrl(p.CoverFilePath),
-                CoverPhotoUrl = GetPublicAssetUrl(p.CoverFilePath),
-                p.Versions
+                sellerProfiles.TryGetValue(p.SellerId, out var seller);
+
+                return new
+                {
+                    p.ProductId,
+                    p.SellerId,
+                    p.CategoryId,
+                    p.Title,
+                    p.Description,
+                    p.Price,
+                    p.IsActive,
+                    p.CreatedAt,
+                    SellerName = seller?.FullName,
+                    SellerPhoneNumber = seller?.PhoneNumber,
+                    SellerProfileName = seller?.FullName,
+                    p.Category,
+                    p.CategoryName,
+                    p.VersionCount,
+                    p.LatestVersion,
+                    ThumbnailUrl = GetPublicAssetUrl(p.CoverFilePath),
+                    CoverPhotoUrl = GetPublicAssetUrl(p.CoverFilePath),
+                    p.Versions
+                };
             }));
         }
 
@@ -201,18 +196,6 @@ namespace CoreK.API.Controllers
                     p.Price,
                     p.IsActive,
                     p.CreatedAt,
-                    SellerName = _context.Users
-                        .Where(u => u.UserId == p.SellerId)
-                        .Select(u => u.FullName)
-                        .FirstOrDefault(),
-                    SellerPhoneNumber = _context.Users
-                        .Where(u => u.UserId == p.SellerId)
-                        .Select(u => u.PhoneNumber)
-                        .FirstOrDefault(),
-                    SellerProfileName = _context.Users
-                        .Where(u => u.UserId == p.SellerId)
-                        .Select(u => u.FullName)
-                        .FirstOrDefault(),
                     Category = p.Category == null ? "Digital Product" : p.Category.CategoryName,
                     VersionCount = p.Versions.Count,
                     LatestVersion = p.Versions
@@ -226,24 +209,31 @@ namespace CoreK.API.Controllers
                 })
                 .ToListAsync();
 
-            return Ok(products.Select(p => new
+            var sellerProfiles = await GetSellerProfiles(products.Select(p => p.SellerId));
+
+            return Ok(products.Select(p =>
             {
-                p.ProductId,
-                p.SellerId,
-                p.CategoryId,
-                p.Title,
-                p.Description,
-                p.Price,
-                p.IsActive,
-                p.CreatedAt,
-                p.SellerName,
-                p.SellerPhoneNumber,
-                p.SellerProfileName,
-                p.Category,
-                p.VersionCount,
-                p.LatestVersion,
-                ThumbnailUrl = GetPublicAssetUrl(p.CoverFilePath),
-                CoverPhotoUrl = GetPublicAssetUrl(p.CoverFilePath)
+                sellerProfiles.TryGetValue(p.SellerId, out var seller);
+
+                return new
+                {
+                    p.ProductId,
+                    p.SellerId,
+                    p.CategoryId,
+                    p.Title,
+                    p.Description,
+                    p.Price,
+                    p.IsActive,
+                    p.CreatedAt,
+                    SellerName = seller?.FullName,
+                    SellerPhoneNumber = seller?.PhoneNumber,
+                    SellerProfileName = seller?.FullName,
+                    p.Category,
+                    p.VersionCount,
+                    p.LatestVersion,
+                    ThumbnailUrl = GetPublicAssetUrl(p.CoverFilePath),
+                    CoverPhotoUrl = GetPublicAssetUrl(p.CoverFilePath)
+                };
             }));
         }
 
@@ -425,6 +415,24 @@ namespace CoreK.API.Controllers
 
             return Ok(new { message = $"Version {versionDto.VersionNumber} pushed successfully!" });
         }
+
+        private async Task<Dictionary<int, SellerProfile>> GetSellerProfiles(IEnumerable<int> sellerIds)
+        {
+            var ids = sellerIds
+                .Distinct()
+                .ToList();
+
+            return await _context.Users
+                .AsNoTracking()
+                .Where(u => ids.Contains(u.UserId))
+                .Select(u => new SellerProfile(
+                    u.UserId,
+                    u.FullName,
+                    u.PhoneNumber))
+                .ToDictionaryAsync(s => s.UserId);
+        }
+
+        private sealed record SellerProfile(int UserId, string FullName, string? PhoneNumber);
 
         private async Task<string> SaveUploadedAsset(IFormFile file)
         {

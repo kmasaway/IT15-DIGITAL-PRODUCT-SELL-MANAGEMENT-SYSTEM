@@ -92,7 +92,7 @@ namespace CoreK.API.Controllers
                 query = query.Where(o => o.CustomerId == customerId.Value);
             }
 
-            var orders = await query
+            var orderRows = await query
                 .OrderByDescending(o => o.CreatedAt)
                 .Select(o => new
                 {
@@ -108,30 +108,58 @@ namespace CoreK.API.Controllers
                     o.CreatedAt,
                     ProductId = o.ProductId,
                     ProductTitle = o.Product == null ? "Deleted product" : o.Product.Title,
-                    SellerId = o.Product == null ? 0 : o.Product.SellerId,
-                    SellerName = o.Product == null
-                        ? "Seller User"
-                        : _context.Users
-                            .Where(u => u.UserId == o.Product.SellerId)
-                            .Select(u => u.FullName)
-                            .FirstOrDefault() ?? $"Seller #{o.Product.SellerId}",
-                    SellerPhoneNumber = o.Product == null
-                        ? null
-                        : _context.Users
-                            .Where(u => u.UserId == o.Product.SellerId)
-                            .Select(u => u.PhoneNumber)
-                            .FirstOrDefault(),
-                    SellerProfileName = o.Product == null
-                        ? "Seller User"
-                        : _context.Users
-                            .Where(u => u.UserId == o.Product.SellerId)
-                            .Select(u => u.FullName)
-                            .FirstOrDefault() ?? $"Seller #{o.Product.SellerId}",
+                    SellerId = o.Product == null ? (int?)null : o.Product.SellerId,
                     Category = o.Product == null || o.Product.Category == null
                         ? "Digital Product"
                         : o.Product.Category.CategoryName
                 })
                 .ToListAsync();
+
+            var sellerIds = orderRows
+                .Where(o => o.SellerId.HasValue)
+                .Select(o => o.SellerId!.Value)
+                .Distinct()
+                .ToList();
+
+            var sellerProfiles = await _context.Users
+                .AsNoTracking()
+                .Where(u => sellerIds.Contains(u.UserId))
+                .Select(u => new
+                {
+                    u.UserId,
+                    u.FullName,
+                    u.PhoneNumber
+                })
+                .ToDictionaryAsync(u => u.UserId);
+
+            var orders = orderRows.Select(o =>
+            {
+                var sellerId = o.SellerId ?? 0;
+                sellerProfiles.TryGetValue(sellerId, out var seller);
+                var sellerName = seller?.FullName
+                    ?? (sellerId > 0 ? $"Seller #{sellerId}" : "Seller User");
+
+                return new
+                {
+                    o.OrderId,
+                    o.CustomerId,
+                    o.CustomerName,
+                    o.CustomerEmail,
+                    o.PaymentMethod,
+                    o.ReferenceNumber,
+                    o.DownloadToken,
+                    o.TotalAmount,
+                    o.Status,
+                    o.CreatedAt,
+                    o.ProductId,
+                    o.ProductTitle,
+                    SellerId = sellerId,
+                    SellerName = sellerName,
+                    SellerPhoneNumber = seller?.PhoneNumber,
+                    SellerProfileName = sellerName,
+                    o.Category
+                };
+            });
 
             return Ok(orders);
         }
