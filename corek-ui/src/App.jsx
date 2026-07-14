@@ -73,7 +73,6 @@ export default function App() {
       {/* Dynamic Header / Navigation Bar */}
       <header style={styles.navbar}>
         <div style={styles.logoGroup}>
-          <div style={styles.logoIcon}></div>
           <span style={styles.logoText}>CoreK</span>
         </div>
         {isCustomerSession ? (
@@ -109,7 +108,7 @@ export default function App() {
             >
               Login
             </button>
-          ) : (
+          ) : isCustomerSession ? (
             <div style={styles.sessionGroup}>
               <button 
                 style={styles.navItemLinkPrimary} 
@@ -118,6 +117,8 @@ export default function App() {
                 Sign Out
               </button>
             </div>
+          ) : (
+            <div style={styles.sessionGroup} aria-hidden="true" />
           )}
         </nav>
       </header>
@@ -174,20 +175,22 @@ const styles = {
   logoGroup: {
     display: 'flex',
     alignItems: 'center',
-    gap: '10px',
-    justifySelf: 'start'
-  },
-  logoIcon: {
-    width: '12px',
-    height: '12px',
-    borderRadius: '50%',
-    backgroundColor: '#00bfa5'
+    justifySelf: 'start',
+    minHeight: '42px'
   },
   logoText: {
-    fontSize: '1.1rem',
-    fontWeight: '800',
+    display: 'inline-flex',
+    alignItems: 'center',
+    minHeight: '34px',
+    border: '1px solid #bfe0d3',
+    borderRadius: '12px',
+    padding: '0.35rem 0.75rem',
+    background: 'linear-gradient(135deg, #ffffff 0%, #eefbf7 100%)',
     color: '#0f291e',
-    letterSpacing: '-0.5px'
+    fontSize: '1.16rem',
+    fontWeight: '900',
+    letterSpacing: '0',
+    boxShadow: '0 8px 20px rgba(15,41,30,0.08)'
   },
   navLinks: {
     display: 'flex',

@@ -5,7 +5,6 @@ export default function Footer() {
         {/* Brand/Mission Block */}
         <div style={styles.brandColumn}>
           <div style={styles.brandHeader}>
-            <div style={styles.dot}></div>
             <span style={styles.logoText}>CoreK Systems</span>
           </div>
           <p style={styles.brandDesc}>
@@ -75,19 +74,17 @@ const styles = {
   brandHeader: {
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
     marginBottom: '1rem'
   },
-  dot: {
-    width: '8px',
-    height: '8px',
-    borderRadius: '50%',
-    backgroundColor: '#00bfa5'
-  },
   logoText: {
+    border: '1px solid #bfe0d3',
+    borderRadius: '12px',
+    background: 'linear-gradient(135deg, #ffffff 0%, #eefbf7 100%)',
+    boxShadow: '0 8px 20px rgba(15,41,30,0.08)',
     fontSize: '1.1rem',
-    fontWeight: '800',
-    color: '#0f291e'
+    fontWeight: '900',
+    color: '#0f291e',
+    padding: '0.35rem 0.75rem'
   },
   brandDesc: {
     fontSize: '0.9rem',

@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   Layers,
   LifeBuoy,
+  LogOut,
   MessageCircle,
   Package,
   Plus,
@@ -103,7 +104,7 @@ const roleConfigs = {
   Admin: {
     className: 'role-admin',
     modules: ['overview', 'reports', 'users', 'products', 'categories', 'payments', 'support', 'profile'],
-    moduleLabels: {},
+    moduleLabels: { profile: 'Account Settings' },
   },
   Seller: {
     className: 'role-seller',
@@ -427,7 +428,7 @@ function DashboardModal({ title, subtitle, children, onClose, size = 'regular' }
   );
 }
 
-export default function Dashboard({ user, userSessionName, activeModule: controlledActiveModule, onActiveModuleChange }) {
+export default function Dashboard({ user, userSessionName, activeModule: controlledActiveModule, onActiveModuleChange, onLogout }) {
   const activeUser = user || {};
   const userId = activeUser.userId || activeUser.UserId || 1;
   const role = activeUser.role || activeUser.Role || 'Customer';
@@ -1560,7 +1561,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
 
   const handleExportReportsPdf = () => {
     const topProducts = (isSeller ? sellerTopProducts : reports?.topProducts || []).slice(0, 5);
-    const categoryRows = isSeller ? sellerSalesByCategory : reports?.salesByCategory || [];
+    const categoryRows = isSeller ? sellerSalesByCategory : [];
     const reportRevenue = isSeller ? sellerRevenue : reports?.totalSales || 0;
     const reportProductCount = isSeller ? roleProducts.length : reports?.totalProducts || 0;
     const reportOrderCount = isSeller ? completedRoleOrders.length : reports?.completedOrders || 0;
@@ -1587,6 +1588,15 @@ export default function Dashboard({ user, userSessionName, activeModule: control
         <td class="number">${escapeHtml(formatMoney(item.sales))}</td>
       </tr>
     `).join('');
+    const categorySection = isSeller
+      ? `
+          <h2>Sales by Category</h2>
+          <table>
+            <thead><tr><th>Category</th><th class="number">Orders</th><th class="number">Sales</th></tr></thead>
+            <tbody>${categoryTableRows || '<tr><td colspan="3">No category sales yet.</td></tr>'}</tbody>
+          </table>
+        `
+      : '';
 
     printWindow.document.write(`
       <!doctype html>
@@ -1626,11 +1636,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
             <tbody>${productRows || '<tr><td colspan="3">No product sales yet.</td></tr>'}</tbody>
           </table>
 
-          <h2>Sales by Category</h2>
-          <table>
-            <thead><tr><th>Category</th><th class="number">Orders</th><th class="number">Sales</th></tr></thead>
-            <tbody>${categoryTableRows || '<tr><td colspan="3">No category sales yet.</td></tr>'}</tbody>
-          </table>
+          ${categorySection}
 
           <script>
             window.addEventListener('load', () => {
@@ -3055,9 +3061,6 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     const reportRevenue = isSeller ? sellerRevenue : reports?.totalSales || 0;
     const reportProducts = isSeller ? roleProducts.length : reports?.totalProducts || 0;
     const reportCompletedOrders = isSeller ? completedRoleOrders.length : reports?.completedOrders || 0;
-    const reportSupportLoad = isSeller
-      ? roleTickets.filter((ticket) => ticket.status !== 'Closed').length
-      : reports?.openTickets || 0;
     const reportCategories = isSeller ? sellerSalesByCategory : reports?.salesByCategory || [];
     const reportTopProducts = isSeller ? sellerTopProducts : reports?.topProducts || [];
 
@@ -3176,28 +3179,16 @@ export default function Dashboard({ user, userSessionName, activeModule: control
             <Layers className="right-side-icon" size={22} />
           </div>
 
-          <div className="panel metric support">
+          <div className="panel metric orders">
             <div>
-              <span>Support Load</span>
-              <strong className="number-value">{reportSupportLoad}</strong>
+              <span>Completed Orders</span>
+              <strong className="number-value">{reportCompletedOrders}</strong>
             </div>
-            <LifeBuoy className="right-side-icon" size={22} />
+            <Download className="right-side-icon" size={22} />
           </div>
         </div>
 
-        <div className="grid-2">
-          <div className="panel chart-panel">
-            <div className="panel-title-row">
-              <div>
-                <h2>Sales by Category</h2>
-                <p>Graph view of category revenue.</p>
-              </div>
-              <Layers size={20} />
-            </div>
-
-            {renderHorizontalChart(reportCategories, 'sales', 'category', formatMoney)}
-          </div>
-
+        <div className="grid-1">
           <div className="panel chart-panel">
             <div className="panel-title-row">
               <div>
@@ -3211,41 +3202,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
           </div>
         </div>
 
-        <div className="grid-2">
-          <div className="panel">
-            <h2>Sales by Category</h2>
-
-            <div className="table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Category</th>
-                    <th className="number-cell">Orders</th>
-                    <th className="money-cell">Sales</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {reportCategories.map((item) => (
-                    <tr key={item.category}>
-                      <td>{item.category}</td>
-                      <td className="number-cell">{item.orders}</td>
-                      <td className="money-cell">{formatMoney(item.sales)}</td>
-                    </tr>
-                  ))}
-
-                  {reportCategories.length === 0 && (
-                    <tr>
-                      <td colSpan="3">
-                        <div className="empty-state">No category sales yet.</div>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
+        <div className="grid-1">
           <div className="panel">
             <h2>Top Products</h2>
 
@@ -3383,7 +3340,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     if (isAdmin) {
       return (
         <div className="panel">
-          <h2>Admin Profile</h2>
+          <h2>Account Settings</h2>
 
           <div className="mini-list">
             <div className="mini-row">
@@ -4202,7 +4159,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       payments: ['Payment', 'Audit sandbox GCash/Card payments and generated access tokens.'],
       reports: ['Reports and Analytics', 'Review sales analytics, category performance, top products, and support load.'],
       users: ['User Directory', 'View registered admins, sellers, and customers without changing their account records.'],
-      profile: ['Admin Profile', 'View account details and payout settings.'],
+      profile: ['Account Settings', 'View account details and payout settings.'],
       support: ['Helpdesk Monitor', 'View product and order-related support tickets across the marketplace.'],
     },
     Seller: {
@@ -4282,6 +4239,13 @@ export default function Dashboard({ user, userSessionName, activeModule: control
             );
           })}
         </nav>
+
+        <div className="dashboard-sidebar-footer">
+          <button className="sidebar-signout-button" type="button" onClick={onLogout}>
+            <span>Sign Out</span>
+            <LogOut size={17} />
+          </button>
+        </div>
       </aside>
       )}
 

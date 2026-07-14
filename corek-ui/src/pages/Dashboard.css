@@ -177,8 +177,6 @@
 
 .dashboard-tab:hover,
 .dashboard-tab.active,
-.role-admin .dashboard-tab:hover,
-.role-admin .dashboard-tab.active,
 .role-customer .dashboard-tab:hover,
 .role-customer .dashboard-tab.active {
   background: #ffffff;
@@ -187,12 +185,61 @@
   box-shadow: none;
 }
 
+.role-admin .dashboard-tab:hover,
+.role-admin .dashboard-tab.active,
 .role-seller .dashboard-tab:hover,
 .role-seller .dashboard-tab.active {
   background: var(--core-teal);
   border-color: var(--core-teal);
   color: #ffffff;
   box-shadow: none;
+}
+
+.dashboard-sidebar-footer {
+  margin-top: auto;
+  padding-top: 18px;
+}
+
+.sidebar-signout-button {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid var(--core-border);
+  border-radius: 12px;
+  background: #ffffff;
+  color: var(--core-dark);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 22px;
+  align-items: center;
+  column-gap: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 800;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    transform 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.sidebar-signout-button svg {
+  justify-self: end;
+}
+
+.sidebar-signout-button:hover,
+.sidebar-signout-button:focus-visible {
+  background: var(--core-dark);
+  border-color: var(--core-dark);
+  color: #ffffff;
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.sidebar-signout-button:active {
+  transform: translateY(0) scale(0.98);
 }
 
 /* MAIN CONTENT */
@@ -425,11 +472,16 @@
 }
 
 /* GRIDS */
+.grid-1,
 .grid-2,
 .grid-3,
 .grid-4 {
   display: grid;
   gap: 16px;
+}
+
+.grid-1 {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .grid-2 {

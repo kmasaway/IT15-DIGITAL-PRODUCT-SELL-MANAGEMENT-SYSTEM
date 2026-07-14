@@ -17,7 +17,6 @@ export default function Header({ currentPage, setCurrentPage, isLoggedIn, onLogo
           style={styles.brand} 
           onClick={() => setCurrentPage(isLoggedIn ? 'home' : 'landing')}
         >
-          <div style={styles.dot}></div>
           <span style={styles.logo}>CoreK</span>
         </div>
 
@@ -111,9 +110,18 @@ const styles = {
     width: '100%' 
   },
   leftSection: { display: 'flex', alignItems: 'center', gap: '2.5rem', flex: 1, maxWidth: '800px' },
-  brand: { display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' },
-  dot: { width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#00bfa5' },
-  logo: { fontSize: '1.25rem', fontWeight: '800', color: '#0b241a', letterSpacing: '-0.5px' },
+  brand: { display: 'flex', alignItems: 'center', cursor: 'pointer' },
+  logo: {
+    border: '1px solid #bfe0d3',
+    borderRadius: '12px',
+    background: 'linear-gradient(135deg, #ffffff 0%, #eefbf7 100%)',
+    color: '#0b241a',
+    fontSize: '1.25rem',
+    fontWeight: '900',
+    letterSpacing: '0',
+    padding: '0.35rem 0.75rem',
+    boxShadow: '0 8px 20px rgba(15,41,30,0.08)'
+  },
   searchForm: { flex: 1, display: 'flex', alignItems: 'center' },
   searchWrapper: { position: 'relative', width: '100%', display: 'flex', alignItems: 'center' },
   searchIcon: { position: 'absolute', left: '14px', color: '#7ea191', pointerEvents: 'none' },
