@@ -30,6 +30,18 @@ namespace CoreK.API.Controllers
                     u.Role,
                     u.IsEmailVerified,
                     u.CreatedAt,
+                    ValidIdStatus = _context.ValidIdSubmissions
+                        .Where(v => v.UserId == u.UserId)
+                        .Select(v => v.Status)
+                        .FirstOrDefault(),
+                    SubscriptionPlan = _context.SellerSubscriptions
+                        .Where(s => s.SellerId == u.UserId)
+                        .Select(s => s.Plan)
+                        .FirstOrDefault(),
+                    SubscriptionSeats = _context.SellerSubscriptions
+                        .Where(s => s.SellerId == u.UserId)
+                        .Select(s => (int?)s.Seats)
+                        .FirstOrDefault(),
                     ProductCount = _context.Products.Count(p => p.SellerId == u.UserId),
                     OrderCount = _context.Orders.Count(o => o.CustomerId == u.UserId),
                     TicketCount = _context.SupportTickets.Count(t => t.CustomerId == u.UserId)

@@ -32,8 +32,6 @@ import { API_BASE_URL, api } from '../services/api';
 import './Dashboard.css';
 
 const MARKETPLACE_PAGE_SIZE = 20;
-const VALID_ID_STORAGE_PREFIX = 'corek_valid_id_';
-const SUBSCRIPTION_STORAGE_PREFIX = 'corek_subscription_';
 const SELLER_SALES_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const API_ASSET_BASE_URL = API_BASE_URL.replace(/\/api\/?$/i, '');
 const PAYOUT_QR_SIZE = 21;
@@ -226,33 +224,44 @@ function readFileAsDataUrl(file) {
   });
 }
 
-function readStoredJson(key, fallbackValue) {
-  try {
-    const storedValue = localStorage.getItem(key);
-    return storedValue ? JSON.parse(storedValue) : fallbackValue;
-  } catch {
-    return fallbackValue;
-  }
-}
-
-function readValidIdReviewRecords() {
-  try {
-    return Object.keys(localStorage)
-      .filter((key) => key.startsWith(VALID_ID_STORAGE_PREFIX))
-      .map((key) => ({
-        ...JSON.parse(localStorage.getItem(key) || '{}'),
-        userId: Number(key.replace(VALID_ID_STORAGE_PREFIX, '')),
-      }))
-      .filter((record) => record.userId && record.fileName)
-      .sort((first, second) => new Date(second.submittedAt || 0) - new Date(first.submittedAt || 0));
-  } catch {
-    return [];
-  }
-}
-
 function getValidPrice(value) {
   const price = Number(normalizePriceInput(value));
   return Number.isFinite(price) && price > 0 ? price : null;
+}
+
+function normalizeValidIdRecord(record) {
+  if (!record) return null;
+
+  const fileUrl = record.fileUrl || record.FileUrl || '';
+  const assetUrl = getAssetUrl(fileUrl);
+  const previewCandidate = record.filePreviewUrl || record.FilePreviewUrl || assetUrl;
+
+  return {
+    validIdSubmissionId: record.validIdSubmissionId || record.ValidIdSubmissionId,
+    userId: record.userId || record.UserId,
+    fullName: record.fullName || record.FullName || '',
+    email: record.email || record.Email || '',
+    idType: record.idType || record.IdType || '',
+    idNumber: record.idNumber || record.IdNumber || '',
+    fileName: record.fileName || record.FileName || '',
+    fileUrl,
+    filePreviewUrl: isImageSource(previewCandidate) ? previewCandidate : '',
+    status: record.status || record.Status || 'Pending Review',
+    remarks: record.remarks || record.Remarks || '',
+    submittedAt: record.submittedAt || record.SubmittedAt,
+    reviewedAt: record.reviewedAt || record.ReviewedAt,
+  };
+}
+
+function normalizeSubscriptionSettings(record, fallbackEmail = '') {
+  return {
+    plan: record?.plan || record?.Plan || defaultSubscriptionSettings.plan,
+    billingCycle: record?.billingCycle || record?.BillingCycle || defaultSubscriptionSettings.billingCycle,
+    billingEmail: record?.billingEmail || record?.BillingEmail || fallbackEmail,
+    seats: String(record?.seats || record?.Seats || defaultSubscriptionSettings.seats),
+    autoRenew: record?.autoRenew ?? record?.AutoRenew ?? defaultSubscriptionSettings.autoRenew,
+    updatedAt: record?.updatedAt || record?.UpdatedAt || '',
+  };
 }
 
 function getAssetUrl(source) {
@@ -476,21 +485,14 @@ export default function Dashboard({ user, userSessionName, activeModule: control
   const [activeTicket, setActiveTicket] = useState(null);
   const [isValidIdModalOpen, setIsValidIdModalOpen] = useState(false);
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
-  const [validIdRecord, setValidIdRecord] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem(`${VALID_ID_STORAGE_PREFIX}${userId}`) || 'null');
-    } catch {
-      return null;
-    }
-  });
+  const [validIdRecord, setValidIdRecord] = useState(null);
   const [validIdForm, setValidIdForm] = useState(emptyValidIdForm);
-  const [validIdReviewRecords, setValidIdReviewRecords] = useState(() => readValidIdReviewRecords());
+  const [validIdReviewRecords, setValidIdReviewRecords] = useState([]);
   const [activeValidIdDetails, setActiveValidIdDetails] = useState(null);
   const [passwordForm, setPasswordForm] = useState(emptyPasswordForm);
   const [subscriptionSettings, setSubscriptionSettings] = useState(() => ({
     ...defaultSubscriptionSettings,
     billingEmail: activeUser.email || activeUser.Email || '',
-    ...readStoredJson(`${SUBSCRIPTION_STORAGE_PREFIX}${userId}`, {}),
   }));
   const [isLibraryFilterOpen, setIsLibraryFilterOpen] = useState(false);
   const [libraryFilters, setLibraryFilters] = useState({
@@ -742,7 +744,19 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     setError('');
 
     try {
-      const [productData, categoryData, orderData, reportData, ticketData, profileData, userData, payoutData] =
+      const [
+        productData,
+        categoryData,
+        orderData,
+        reportData,
+        ticketData,
+        profileData,
+        userData,
+        payoutData,
+        validIdData,
+        validIdReviewData,
+        subscriptionData,
+      ] =
         await Promise.all([
           isSeller ? api.getSellerProducts(userId) : api.getProducts(searchTerm),
           api.getCategories(),
@@ -752,6 +766,9 @@ export default function Dashboard({ user, userSessionName, activeModule: control
           api.getProfile(userId),
           isAdmin ? api.getUsers() : Promise.resolve([]),
           isAdmin || isSeller ? api.getPayoutRequests(isSeller ? userId : undefined) : Promise.resolve([]),
+          !isAdmin ? api.getValidId(userId) : Promise.resolve(null),
+          isAdmin ? api.getValidIds() : Promise.resolve([]),
+          isSeller ? api.getSubscription(userId) : Promise.resolve(null),
         ]);
 
       setProducts(productData || []);
@@ -761,6 +778,11 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       setTickets(ticketData || []);
       setUsers(userData || []);
       setPayoutRequests(payoutData || []);
+      setValidIdRecord(normalizeValidIdRecord(validIdData));
+      setValidIdReviewRecords((validIdReviewData || []).map(normalizeValidIdRecord).filter(Boolean));
+      if (isSeller) {
+        setSubscriptionSettings(normalizeSubscriptionSettings(subscriptionData, profileData.email || activeUser.email || activeUser.Email || ''));
+      }
       setProfile({
         fullName: profileData.fullName || displayName,
         email: profileData.email || '',
@@ -775,7 +797,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     } finally {
       setIsLoading(false);
     }
-  }, [displayName, isAdmin, isSeller, role, searchTerm, userId]);
+  }, [activeUser.Email, activeUser.email, displayName, isAdmin, isSeller, role, searchTerm, userId]);
 
   useEffect(() => {
     const dashboardLoadTimer = window.setTimeout(() => {
@@ -859,9 +881,12 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     if (versionFilePreviewUrl) URL.revokeObjectURL(versionFilePreviewUrl);
   }, [versionFilePreviewUrl]);
 
-  const refreshValidIdReviewRecords = useCallback(() => {
-    setValidIdReviewRecords(readValidIdReviewRecords());
-  }, []);
+  const refreshValidIdReviewRecords = useCallback(async () => {
+    if (!isAdmin) return;
+
+    const records = await api.getValidIds();
+    setValidIdReviewRecords((records || []).map(normalizeValidIdRecord).filter(Boolean));
+  }, [isAdmin]);
 
   const showNotice = (message, detail = '') => {
     setNotice('');
@@ -1120,7 +1145,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       remarks: '',
     };
 
-    if (!nextRecord.idNumber || !nextRecord.fileName) {
+    if (!nextRecord.idNumber || !nextRecord.fileName || !validIdForm.file) {
       showError('Valid ID number and file attachment are required.');
       return;
     }
@@ -1132,16 +1157,31 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     });
     if (!confirmed) return;
 
-    localStorage.setItem(`${VALID_ID_STORAGE_PREFIX}${userId}`, JSON.stringify(nextRecord));
-    setValidIdRecord(nextRecord);
-    setValidIdForm({ ...emptyValidIdForm, ...nextRecord });
-    refreshValidIdReviewRecords();
-    setIsValidIdModalOpen(false);
-    showNotice('ID Submitted', 'ID Submitted waiting for verification then the admin will check.');
+    try {
+      const formData = new FormData();
+      formData.append('idType', nextRecord.idType);
+      formData.append('idNumber', nextRecord.idNumber);
+      if (validIdForm.file) {
+        formData.append('file', validIdForm.file);
+      }
+
+      const result = await api.submitValidId(userId, formData);
+      const savedRecord = normalizeValidIdRecord(result.validId || result);
+      setValidIdRecord(savedRecord);
+      setValidIdForm({ ...emptyValidIdForm, ...savedRecord, file: null });
+      await refreshValidIdReviewRecords();
+      setIsValidIdModalOpen(false);
+      showNotice('ID Submitted', result.message || 'ID Submitted waiting for verification then the admin will check.');
+    } catch (err) {
+      showError(err.message);
+    }
   };
 
   const handleValidIdDecision = async (record, status) => {
-    if (!record?.userId) return;
+    if (!record?.userId || !record?.validIdSubmissionId) {
+      showError('Valid ID submission details are incomplete.');
+      return;
+    }
 
     let remarks = '';
     if (status === 'Rejected') {
@@ -1162,19 +1202,20 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     });
     if (!confirmed) return;
 
-    const nextRecord = {
-      ...record,
-      status,
-      remarks,
-      reviewedAt: new Date().toISOString(),
-    };
-
-    localStorage.setItem(`${VALID_ID_STORAGE_PREFIX}${record.userId}`, JSON.stringify(nextRecord));
-    if (Number(record.userId) === Number(userId)) {
-      setValidIdRecord(nextRecord);
+    try {
+      const result = await api.updateValidIdStatus(record.validIdSubmissionId, {
+        status,
+        remarks,
+      });
+      const nextRecord = normalizeValidIdRecord(result.validId || result);
+      if (Number(nextRecord?.userId) === Number(userId)) {
+        setValidIdRecord(nextRecord);
+      }
+      await refreshValidIdReviewRecords();
+      showNotice(result.message || (status === 'Verified' ? 'Valid ID accepted.' : 'Valid ID rejected.'), status === 'Rejected' ? remarks : '');
+    } catch (err) {
+      showError(err.message);
     }
-    refreshValidIdReviewRecords();
-    showNotice(status === 'Verified' ? 'Valid ID accepted.' : 'Valid ID rejected.', status === 'Rejected' ? remarks : '');
   };
 
   const renderHorizontalChart = (items, valueKey, labelKey, formatValue = (value) => value) => {
@@ -1809,15 +1850,21 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     });
     if (!confirmed) return;
 
-    const nextSubscriptionSettings = {
-      ...subscriptionSettings,
-      seats: String(seats),
-      updatedAt: new Date().toISOString(),
-    };
+    try {
+      const result = await api.updateSubscription(userId, {
+        plan: subscriptionSettings.plan,
+        billingCycle: subscriptionSettings.billingCycle,
+        billingEmail: subscriptionSettings.billingEmail,
+        seats,
+        autoRenew: subscriptionSettings.autoRenew,
+      });
 
-    localStorage.setItem(`${SUBSCRIPTION_STORAGE_PREFIX}${userId}`, JSON.stringify(nextSubscriptionSettings));
-    setSubscriptionSettings(nextSubscriptionSettings);
-    showNotice('Subscription saved.', 'ERP subscription settings were updated.');
+      setSubscriptionSettings(normalizeSubscriptionSettings(result.subscription || result, subscriptionSettings.billingEmail));
+      showNotice('Subscription saved.', result.message || 'ERP subscription settings were updated.');
+      await loadDashboard();
+    } catch (err) {
+      showError(err.message);
+    }
   };
 
   const handleTicketSubmit = async (event) => {
@@ -3753,8 +3800,8 @@ export default function Dashboard({ user, userSessionName, activeModule: control
         <button
           className="button"
           type="button"
-          onClick={() => {
-            handleValidIdDecision(activeValidIdDetails, 'Verified');
+          onClick={async () => {
+            await handleValidIdDecision(activeValidIdDetails, 'Verified');
             setActiveValidIdDetails(null);
           }}
         >
@@ -3764,8 +3811,8 @@ export default function Dashboard({ user, userSessionName, activeModule: control
         <button
           className="button secondary"
           type="button"
-          onClick={() => {
-            handleValidIdDecision(activeValidIdDetails, 'Rejected');
+          onClick={async () => {
+            await handleValidIdDecision(activeValidIdDetails, 'Rejected');
             setActiveValidIdDetails(null);
           }}
         >

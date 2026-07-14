@@ -101,6 +101,21 @@ export const api = {
     method: 'PUT',
     body: JSON.stringify(payload),
   }),
+  getValidId: (userId) => request(`/SellerAccounts/${userId}/valid-id`),
+  getValidIds: () => request('/SellerAccounts/valid-ids'),
+  submitValidId: (userId, formData) => request(`/SellerAccounts/${userId}/valid-id`, {
+    method: 'POST',
+    body: formData,
+  }),
+  updateValidIdStatus: (validIdSubmissionId, payload) => request(`/SellerAccounts/valid-ids/${validIdSubmissionId}/status`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  }),
+  getSubscription: (sellerId) => request(`/SellerAccounts/${sellerId}/subscription`),
+  updateSubscription: (sellerId, payload) => request(`/SellerAccounts/${sellerId}/subscription`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  }),
 
   checkout: (payload) => request('/Payments/checkout', { method: 'POST', body: JSON.stringify(payload) }),
   getOrders: (customerId) => request(`/Payments/orders${customerId ? `?customerId=${customerId}` : ''}`),

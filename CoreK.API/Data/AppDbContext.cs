@@ -17,6 +17,8 @@ namespace CoreK.API.Data
         public DbSet<PayoutRequest> PayoutRequests { get; set; }
         public DbSet<SupportTicket> SupportTickets { get; set; }
         public DbSet<ChatMessage> ChatMessages { get; set; }
+        public DbSet<ValidIdSubmission> ValidIdSubmissions { get; set; }
+        public DbSet<SellerSubscription> SellerSubscriptions { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -54,6 +56,26 @@ namespace CoreK.API.Data
 
             modelBuilder.Entity<ChatMessage>()
                 .HasIndex(m => new { m.SellerId, m.CustomerId, m.CreatedAt });
+
+            modelBuilder.Entity<ValidIdSubmission>()
+                .HasOne(v => v.User)
+                .WithMany()
+                .HasForeignKey(v => v.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ValidIdSubmission>()
+                .HasIndex(v => v.UserId)
+                .IsUnique();
+
+            modelBuilder.Entity<SellerSubscription>()
+                .HasOne(s => s.Seller)
+                .WithMany()
+                .HasForeignKey(s => s.SellerId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<SellerSubscription>()
+                .HasIndex(s => s.SellerId)
+                .IsUnique();
         }
     }
 }
