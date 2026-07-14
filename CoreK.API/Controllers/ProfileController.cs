@@ -51,8 +51,15 @@ namespace CoreK.API.Controllers
             var user = await _context.Users.FindAsync(userId);
             if (user == null) return NotFound("User profile not found.");
 
+            var fullName = dto.FullName?.Trim() ?? string.Empty;
+            var email = dto.Email?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(fullName) || string.IsNullOrWhiteSpace(email))
+            {
+                return BadRequest("Full name and email are required.");
+            }
+
             var emailExists = await _context.Users.AnyAsync(u =>
-                u.UserId != userId && u.Email == dto.Email);
+                u.UserId != userId && u.Email == email);
             if (emailExists) return BadRequest("Email is already used by another account.");
 
             var phoneNumber = dto.PhoneNumber?.Trim();
@@ -61,8 +68,8 @@ namespace CoreK.API.Controllers
                 return BadRequest("Phone must be a Philippine mobile number using the 09XXXXXXXXX format.");
             }
 
-            user.FullName = dto.FullName.Trim();
-            user.Email = dto.Email.Trim();
+            user.FullName = fullName;
+            user.Email = email;
             user.PhoneNumber = phoneNumber;
             user.Bio = dto.Bio?.Trim();
             user.PayoutMethod = dto.PayoutMethod?.Trim();
@@ -99,17 +106,21 @@ namespace CoreK.API.Controllers
             var user = await _context.Users.FindAsync(userId);
             if (user == null) return NotFound("User profile not found.");
 
-            if (!BCrypt.Net.BCrypt.Verify(dto.CurrentPassword, user.PasswordHash))
+            var currentPassword = dto.CurrentPassword ?? string.Empty;
+            var newPassword = dto.NewPassword ?? string.Empty;
+            var confirmPassword = dto.ConfirmPassword ?? string.Empty;
+
+            if (!BCrypt.Net.BCrypt.Verify(currentPassword, user.PasswordHash))
             {
                 return BadRequest("Current password is incorrect.");
             }
 
-            if (dto.NewPassword != dto.ConfirmPassword)
+            if (newPassword != confirmPassword)
             {
                 return BadRequest("Password confirmation does not match.");
             }
 
-            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
             await _context.SaveChangesAsync();
 
             return Ok(new { message = "Password changed successfully." });

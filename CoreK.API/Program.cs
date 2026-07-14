@@ -88,11 +88,24 @@ app.UseCors(reactCorsPolicy);
 
 app.UseHttpsRedirection();
 app.UseDefaultFiles();
-app.UseStaticFiles();
+var spaShellFileOptions = new StaticFileOptions
+{
+    OnPrepareResponse = context =>
+    {
+        if (context.File.Name.Equals("index.html", StringComparison.OrdinalIgnoreCase))
+        {
+            context.Context.Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";
+            context.Context.Response.Headers.Pragma = "no-cache";
+            context.Context.Response.Headers.Expires = "0";
+        }
+    }
+};
+
+app.UseStaticFiles(spaShellFileOptions);
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
-app.MapFallbackToFile("index.html");
+app.MapFallbackToFile("index.html", spaShellFileOptions);
 
 app.Run();
 
@@ -166,6 +179,42 @@ static void EnsureSellerAccountTables(AppDbContext db, ILogger logger)
                 );
             END;
 
+            IF OBJECT_ID(N'[PayoutRequests]', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [PayoutRequests] (
+                    [PayoutRequestId] int NOT NULL IDENTITY,
+                    [SellerId] int NOT NULL,
+                    [Amount] decimal(10,2) NOT NULL,
+                    [PayoutMethod] nvarchar(50) NOT NULL,
+                    [PayoutAccountName] nvarchar(150) NOT NULL,
+                    [PayoutAccountNumber] nvarchar(80) NOT NULL,
+                    [RangeStart] datetime2 NULL,
+                    [RangeEnd] datetime2 NULL,
+                    [Status] nvarchar(50) NOT NULL,
+                    [RequestedAt] datetime2 NOT NULL,
+                    [ReviewedAt] datetime2 NULL,
+                    CONSTRAINT [PK_PayoutRequests] PRIMARY KEY ([PayoutRequestId]),
+                    CONSTRAINT [FK_PayoutRequests_Users_SellerId] FOREIGN KEY ([SellerId]) REFERENCES [Users] ([UserId]) ON DELETE NO ACTION
+                );
+            END;
+
+            IF OBJECT_ID(N'[ChatMessages]', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [ChatMessages] (
+                    [ChatMessageId] int NOT NULL IDENTITY,
+                    [SellerId] int NOT NULL,
+                    [CustomerId] int NOT NULL,
+                    [ProductId] int NULL,
+                    [SenderId] int NOT NULL,
+                    [SenderName] nvarchar(150) NOT NULL,
+                    [SenderRole] nvarchar(50) NOT NULL,
+                    [Message] nvarchar(max) NOT NULL,
+                    [CreatedAt] datetime2 NOT NULL,
+                    CONSTRAINT [PK_ChatMessages] PRIMARY KEY ([ChatMessageId]),
+                    CONSTRAINT [FK_ChatMessages_Products_ProductId] FOREIGN KEY ([ProductId]) REFERENCES [Products] ([ProductId]) ON DELETE SET NULL
+                );
+            END;
+
             IF OBJECT_ID(N'[SellerSubscriptions]', N'U') IS NOT NULL
                 AND NOT EXISTS (
                     SELECT 1
@@ -187,11 +236,44 @@ static void EnsureSellerAccountTables(AppDbContext db, ILogger logger)
             BEGIN
                 CREATE UNIQUE INDEX [IX_ValidIdSubmissions_UserId] ON [ValidIdSubmissions] ([UserId]);
             END;
+
+            IF OBJECT_ID(N'[PayoutRequests]', N'U') IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM sys.indexes
+                    WHERE [name] = N'IX_PayoutRequests_SellerId'
+                        AND [object_id] = OBJECT_ID(N'[PayoutRequests]')
+                )
+            BEGIN
+                CREATE INDEX [IX_PayoutRequests_SellerId] ON [PayoutRequests] ([SellerId]);
+            END;
+
+            IF OBJECT_ID(N'[ChatMessages]', N'U') IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM sys.indexes
+                    WHERE [name] = N'IX_ChatMessages_ProductId'
+                        AND [object_id] = OBJECT_ID(N'[ChatMessages]')
+                )
+            BEGIN
+                CREATE INDEX [IX_ChatMessages_ProductId] ON [ChatMessages] ([ProductId]);
+            END;
+
+            IF OBJECT_ID(N'[ChatMessages]', N'U') IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM sys.indexes
+                    WHERE [name] = N'IX_ChatMessages_SellerId_CustomerId_CreatedAt'
+                        AND [object_id] = OBJECT_ID(N'[ChatMessages]')
+                )
+            BEGIN
+                CREATE INDEX [IX_ChatMessages_SellerId_CustomerId_CreatedAt] ON [ChatMessages] ([SellerId], [CustomerId], [CreatedAt]);
+            END;
             """);
     }
     catch (Exception ex)
     {
-        logger.LogWarning(ex, "Seller account tables could not be verified or created.");
+        logger.LogWarning(ex, "Operational tables could not be verified or created.");
     }
 }
 

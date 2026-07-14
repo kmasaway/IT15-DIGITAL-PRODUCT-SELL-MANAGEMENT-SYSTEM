@@ -273,6 +273,13 @@ namespace CoreK.API.Controllers
                 return BadRequest("Products can only be assigned to seller accounts.");
             }
 
+            var title = productDto.Title?.Trim() ?? string.Empty;
+            var description = productDto.Description?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(description))
+            {
+                return BadRequest("Product title and description are required.");
+            }
+
             await using var transaction = await _context.Database.BeginTransactionAsync();
             string? savedFilePath = null;
 
@@ -282,8 +289,8 @@ namespace CoreK.API.Controllers
                 {
                     SellerId = sellerId,
                     CategoryId = productDto.CategoryId,
-                    Title = productDto.Title.Trim(),
-                    Description = productDto.Description.Trim(),
+                    Title = title,
+                    Description = description,
                     Price = productDto.Price,
                     IsActive = IsAdmin
                 };
@@ -359,9 +366,16 @@ namespace CoreK.API.Controllers
             var categoryExists = await _context.Categories.AnyAsync(c => c.CategoryId == productDto.CategoryId);
             if (!categoryExists) return BadRequest("Invalid category specified.");
 
+            var title = productDto.Title?.Trim() ?? string.Empty;
+            var description = productDto.Description?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(description))
+            {
+                return BadRequest("Product title and description are required.");
+            }
+
             product.CategoryId = productDto.CategoryId;
-            product.Title = productDto.Title;
-            product.Description = productDto.Description;
+            product.Title = title;
+            product.Description = description;
             product.Price = productDto.Price;
             product.IsActive = IsAdmin ? productDto.IsActive : false;
 

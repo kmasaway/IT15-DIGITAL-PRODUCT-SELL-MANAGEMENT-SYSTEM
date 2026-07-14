@@ -1,7 +1,6 @@
 using CoreK.API.Data;
 using CoreK.API.DTOs;
 using CoreK.API.Models;
-using Microsoft.Data.SqlClient;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -43,7 +42,7 @@ namespace CoreK.API.Controllers
                     .OrderByDescending(v => v.SubmittedAt)
                     .ToListAsync();
             }
-            catch (Exception ex) when (IsMissingSellerAccountStorage(ex))
+            catch (Exception ex) when (DatabaseErrorHelper.IsMissingStorage(ex))
             {
                 return Ok(Array.Empty<object>());
             }
@@ -65,7 +64,7 @@ namespace CoreK.API.Controllers
                     .Include(v => v.User)
                     .FirstOrDefaultAsync(v => v.UserId == userId);
             }
-            catch (Exception ex) when (IsMissingSellerAccountStorage(ex))
+            catch (Exception ex) when (DatabaseErrorHelper.IsMissingStorage(ex))
             {
                 return Ok(null);
             }
@@ -112,7 +111,7 @@ namespace CoreK.API.Controllers
                 existingSubmission = await _context.ValidIdSubmissions
                     .FirstOrDefaultAsync(v => v.UserId == userId);
             }
-            catch (Exception ex) when (IsMissingSellerAccountStorage(ex))
+            catch (Exception ex) when (DatabaseErrorHelper.IsMissingStorage(ex))
             {
                 return StatusCode(503, new { message = "Valid ID storage is still being prepared. Please try again shortly." });
             }
@@ -154,7 +153,7 @@ namespace CoreK.API.Controllers
                 .FirstOrDefaultAsync(v => v.ValidIdSubmissionId == validIdSubmissionId);
             if (submission == null) return NotFound("Valid ID submission was not found.");
 
-            var status = dto.Status.Trim();
+            var status = dto.Status?.Trim() ?? string.Empty;
             if (!string.Equals(status, "Verified", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(status, "Rejected", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(status, "Pending Review", StringComparison.OrdinalIgnoreCase))
@@ -201,7 +200,7 @@ namespace CoreK.API.Controllers
                 subscription = await GetOrCreateSubscription(seller);
                 await _context.SaveChangesAsync();
             }
-            catch (Exception ex) when (IsMissingSellerAccountStorage(ex))
+            catch (Exception ex) when (DatabaseErrorHelper.IsMissingStorage(ex))
             {
                 subscription = CreateDefaultSubscription(seller);
             }
@@ -218,16 +217,24 @@ namespace CoreK.API.Controllers
             var seller = await _context.Users.FindAsync(sellerId);
             if (seller == null) return NotFound("Seller account was not found.");
 
+            var plan = dto.Plan?.Trim() ?? string.Empty;
+            var billingCycle = dto.BillingCycle?.Trim() ?? string.Empty;
+            var billingEmail = dto.BillingEmail?.Trim() ?? string.Empty;
             var allowedPlans = new[] { "Starter", "Professional", "Enterprise" };
             var allowedCycles = new[] { "Monthly", "Quarterly", "Annual" };
-            if (!allowedPlans.Contains(dto.Plan, StringComparer.OrdinalIgnoreCase))
+            if (!allowedPlans.Contains(plan, StringComparer.OrdinalIgnoreCase))
             {
                 return BadRequest("Unsupported subscription plan.");
             }
 
-            if (!allowedCycles.Contains(dto.BillingCycle, StringComparer.OrdinalIgnoreCase))
+            if (!allowedCycles.Contains(billingCycle, StringComparer.OrdinalIgnoreCase))
             {
                 return BadRequest("Unsupported billing cycle.");
+            }
+
+            if (string.IsNullOrWhiteSpace(billingEmail))
+            {
+                return BadRequest("Billing email is required.");
             }
 
             SellerSubscription subscription;
@@ -236,14 +243,14 @@ namespace CoreK.API.Controllers
             {
                 subscription = await GetOrCreateSubscription(seller);
             }
-            catch (Exception ex) when (IsMissingSellerAccountStorage(ex))
+            catch (Exception ex) when (DatabaseErrorHelper.IsMissingStorage(ex))
             {
                 return StatusCode(503, new { message = "Subscription storage is still being prepared. Please try again shortly." });
             }
 
-            subscription.Plan = dto.Plan.Trim();
-            subscription.BillingCycle = dto.BillingCycle.Trim();
-            subscription.BillingEmail = dto.BillingEmail.Trim();
+            subscription.Plan = plan;
+            subscription.BillingCycle = billingCycle;
+            subscription.BillingEmail = billingEmail;
             subscription.Seats = dto.Seats;
             subscription.AutoRenew = dto.AutoRenew;
             subscription.UpdatedAt = DateTime.UtcNow;
@@ -334,24 +341,6 @@ namespace CoreK.API.Controllers
                 subscription.AutoRenew,
                 subscription.UpdatedAt
             };
-        }
-
-        private static bool IsMissingSellerAccountStorage(Exception exception)
-        {
-            var currentException = exception;
-
-            while (currentException != null)
-            {
-                if (currentException is SqlException sqlException
-                    && sqlException.Errors.Cast<SqlError>().Any(error => error.Number is 207 or 208))
-                {
-                    return true;
-                }
-
-                currentException = currentException.InnerException;
-            }
-
-            return false;
         }
 
         private static string? GetPublicAssetUrl(string? filePath)

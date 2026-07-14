@@ -23,6 +23,11 @@ namespace CoreK.API.Controllers
         [Authorize(Roles = "Admin,Customer")]
         public async Task<IActionResult> CreateCheckout([FromBody] CreatePaymentDto dto)
         {
+            if (dto.ProductId <= 0)
+            {
+                return BadRequest(new { message = "Select a product for checkout." });
+            }
+
             var product = await _context.Products
                 .Include(p => p.Category)
                 .Include(p => p.Versions)
@@ -168,24 +173,31 @@ namespace CoreK.API.Controllers
         [Authorize(Roles = "Admin,Seller")]
         public async Task<IActionResult> GetPayouts([FromQuery] int? sellerId)
         {
-            var query = _context.PayoutRequests
-                .Include(p => p.Seller)
-                .AsQueryable();
-
-            if (IsSeller)
+            try
             {
-                query = query.Where(p => p.SellerId == CurrentUserId);
+                var query = _context.PayoutRequests
+                    .Include(p => p.Seller)
+                    .AsQueryable();
+
+                if (IsSeller)
+                {
+                    query = query.Where(p => p.SellerId == CurrentUserId);
+                }
+                else if (sellerId.HasValue)
+                {
+                    query = query.Where(p => p.SellerId == sellerId.Value);
+                }
+
+                var payouts = await query
+                    .OrderByDescending(p => p.RequestedAt)
+                    .ToListAsync();
+
+                return Ok(payouts.Select(p => ToPayoutResponse(p)));
             }
-            else if (sellerId.HasValue)
+            catch (Exception ex) when (DatabaseErrorHelper.IsMissingStorage(ex))
             {
-                query = query.Where(p => p.SellerId == sellerId.Value);
+                return Ok(Array.Empty<object>());
             }
-
-            var payouts = await query
-                .OrderByDescending(p => p.RequestedAt)
-                .ToListAsync();
-
-            return Ok(payouts.Select(p => ToPayoutResponse(p)));
         }
 
         [HttpPost("payouts")]
@@ -209,8 +221,17 @@ namespace CoreK.API.Controllers
                 return BadRequest(new { message = "The payout start date must be before the end date." });
             }
 
-            var hasPendingRequest = await _context.PayoutRequests.AnyAsync(p =>
-                p.SellerId == CurrentUserId && p.Status == "Pending Review");
+            bool hasPendingRequest;
+
+            try
+            {
+                hasPendingRequest = await _context.PayoutRequests.AnyAsync(p =>
+                    p.SellerId == CurrentUserId && p.Status == "Pending Review");
+            }
+            catch (Exception ex) when (DatabaseErrorHelper.IsMissingStorage(ex))
+            {
+                return StatusCode(503, new { message = "Payout storage is still being prepared. Please try again shortly." });
+            }
 
             if (hasPendingRequest)
             {
@@ -253,8 +274,15 @@ namespace CoreK.API.Controllers
                 RequestedAt = DateTime.UtcNow
             };
 
-            _context.PayoutRequests.Add(payoutRequest);
-            await _context.SaveChangesAsync();
+            try
+            {
+                _context.PayoutRequests.Add(payoutRequest);
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex) when (DatabaseErrorHelper.IsMissingStorage(ex))
+            {
+                return StatusCode(503, new { message = "Payout storage is still being prepared. Please try again shortly." });
+            }
 
             return Ok(new
             {
@@ -275,22 +303,39 @@ namespace CoreK.API.Controllers
                 "Rejected"
             };
 
-            if (!allowedStatuses.Contains(dto.Status.Trim()))
+            var requestedStatus = dto.Status?.Trim() ?? string.Empty;
+            if (!allowedStatuses.Contains(requestedStatus))
             {
                 return BadRequest(new { message = "Payout status must be Pending Review, Approved, Released, or Rejected." });
             }
 
-            var payoutRequest = await _context.PayoutRequests
-                .Include(p => p.Seller)
-                .FirstOrDefaultAsync(p => p.PayoutRequestId == payoutRequestId);
+            PayoutRequest? payoutRequest;
+
+            try
+            {
+                payoutRequest = await _context.PayoutRequests
+                    .Include(p => p.Seller)
+                    .FirstOrDefaultAsync(p => p.PayoutRequestId == payoutRequestId);
+            }
+            catch (Exception ex) when (DatabaseErrorHelper.IsMissingStorage(ex))
+            {
+                return StatusCode(503, new { message = "Payout storage is still being prepared. Please try again shortly." });
+            }
 
             if (payoutRequest == null) return NotFound(new { message = "Payout request was not found." });
 
             payoutRequest.Status = allowedStatuses.First(status =>
-                status.Equals(dto.Status.Trim(), StringComparison.OrdinalIgnoreCase));
+                status.Equals(requestedStatus, StringComparison.OrdinalIgnoreCase));
             payoutRequest.ReviewedAt = payoutRequest.Status == "Pending Review" ? null : DateTime.UtcNow;
 
-            await _context.SaveChangesAsync();
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex) when (DatabaseErrorHelper.IsMissingStorage(ex))
+            {
+                return StatusCode(503, new { message = "Payout storage is still being prepared. Please try again shortly." });
+            }
 
             return Ok(new
             {

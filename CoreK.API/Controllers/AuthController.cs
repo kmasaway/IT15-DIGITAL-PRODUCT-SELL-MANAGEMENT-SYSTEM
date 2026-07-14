@@ -29,17 +29,27 @@ namespace CoreK.API.Controllers
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterDto dto)
         {
+            var fullName = dto.FullName?.Trim() ?? string.Empty;
+            var email = dto.Email?.Trim() ?? string.Empty;
+            var password = dto.Password ?? string.Empty;
             var requestedRole = dto.Role?.Trim();
             var safeRole = string.Equals(requestedRole, "Seller", StringComparison.OrdinalIgnoreCase)
                 ? "Seller"
                 : "Customer";
 
-            if (await _context.Users.AnyAsync(u => u.Email == dto.Email))
+            if (string.IsNullOrWhiteSpace(fullName)
+                || string.IsNullOrWhiteSpace(email)
+                || string.IsNullOrWhiteSpace(password))
+            {
+                return BadRequest("Full name, email, and password are required.");
+            }
+
+            if (await _context.Users.AnyAsync(u => u.Email == email))
             {
                 return BadRequest("Email is already registered.");
             }
 
-            string passwordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password);
+            string passwordHash = BCrypt.Net.BCrypt.HashPassword(password);
             var senderEmail = _configuration["EmailSettings:SenderEmail"];
             var senderPassword = _configuration["EmailSettings:AppPassword"];
             var isEmailVerificationConfigured =
@@ -51,8 +61,8 @@ namespace CoreK.API.Controllers
 
             var newUser = new User
             {
-                FullName = dto.FullName,
-                Email = dto.Email,
+                FullName = fullName,
+                Email = email,
                 PasswordHash = passwordHash,
                 Role = safeRole,
                 IsEmailVerified = !isEmailVerificationConfigured,
@@ -99,7 +109,9 @@ namespace CoreK.API.Controllers
         [HttpPost("verify-code")]
         public async Task<IActionResult> VerifyEmailCode([FromBody] VerifyEmailCodeDto dto)
         {
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
+            var email = dto.Email?.Trim() ?? string.Empty;
+            var code = dto.Code?.Trim() ?? string.Empty;
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
             if (user == null)
             {
                 return BadRequest("No account was found for this email address.");
@@ -110,7 +122,7 @@ namespace CoreK.API.Controllers
                 return Ok(new { message = "This account is already verified. You can now sign in." });
             }
 
-            if (user.EmailVerificationToken != dto.Code.Trim())
+            if (user.EmailVerificationToken != code)
             {
                 return BadRequest("Invalid verification code. Please check your email and try again.");
             }
@@ -170,9 +182,11 @@ namespace CoreK.API.Controllers
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDto dto)
         {
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
+            var email = dto.Email?.Trim() ?? string.Empty;
+            var password = dto.Password ?? string.Empty;
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
             
-            if (user == null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
+            if (user == null || !BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
             {
                 return Unauthorized("Invalid email or password.");
             }

@@ -744,32 +744,76 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     setError('');
 
     try {
-      const [
-        productData,
-        categoryData,
-        orderData,
-        reportData,
-        ticketData,
-        profileData,
-        userData,
-        payoutData,
-        validIdData,
-        validIdReviewData,
-        subscriptionData,
-      ] =
-        await Promise.all([
-          isSeller ? api.getSellerProducts(userId) : api.getProducts(searchTerm),
-          api.getCategories(),
-          api.getOrders(role === 'Customer' ? userId : undefined),
-          api.getReports(),
-          api.getTickets(role === 'Customer' ? userId : undefined),
-          api.getProfile(userId),
-          isAdmin ? api.getUsers() : Promise.resolve([]),
-          isAdmin || isSeller ? api.getPayoutRequests(isSeller ? userId : undefined) : Promise.resolve([]),
-          !isAdmin ? api.getValidId(userId) : Promise.resolve(null),
-          isAdmin ? api.getValidIds() : Promise.resolve([]),
-          isSeller ? api.getSubscription(userId) : Promise.resolve(null),
-        ]);
+      const dashboardRequests = [
+        {
+          key: 'products',
+          fallback: [],
+          request: () => (isSeller ? api.getSellerProducts(userId) : api.getProducts(searchTerm)),
+        },
+        { key: 'categories', fallback: [], request: () => api.getCategories() },
+        { key: 'orders', fallback: [], request: () => api.getOrders(role === 'Customer' ? userId : undefined) },
+        { key: 'reports', fallback: null, request: () => api.getReports() },
+        { key: 'tickets', fallback: [], request: () => api.getTickets(role === 'Customer' ? userId : undefined) },
+        {
+          key: 'profile',
+          fallback: {
+            fullName: displayName,
+            email: activeUser.email || activeUser.Email || '',
+            phoneNumber: '',
+            bio: '',
+            payoutMethod: 'GCash',
+            payoutAccountName: displayName,
+            payoutAccountNumber: '',
+          },
+          request: () => api.getProfile(userId),
+        },
+        { key: 'users', fallback: [], request: () => (isAdmin ? api.getUsers() : Promise.resolve([])) },
+        {
+          key: 'payouts',
+          fallback: [],
+          request: () => (isAdmin || isSeller ? api.getPayoutRequests(isSeller ? userId : undefined) : Promise.resolve([])),
+        },
+        { key: 'validId', fallback: null, request: () => (!isAdmin ? api.getValidId(userId) : Promise.resolve(null)) },
+        { key: 'validIdReview', fallback: [], request: () => (isAdmin ? api.getValidIds() : Promise.resolve([])) },
+        { key: 'subscription', fallback: null, request: () => (isSeller ? api.getSubscription(userId) : Promise.resolve(null)) },
+      ];
+
+      const settledResults = await Promise.allSettled(
+        dashboardRequests.map((item) => item.request())
+      );
+      const dashboardData = {};
+      const failedRequests = [];
+
+      settledResults.forEach((result, index) => {
+        const request = dashboardRequests[index];
+
+        if (result.status === 'fulfilled') {
+          dashboardData[request.key] = result.value ?? request.fallback;
+          return;
+        }
+
+        dashboardData[request.key] = request.fallback;
+        failedRequests.push({
+          key: request.key,
+          message: result.reason?.message || 'Request failed',
+        });
+      });
+
+      if (failedRequests.length > 0) {
+        console.warn('Dashboard data loaded with partial failures:', failedRequests);
+      }
+
+      const productData = dashboardData.products;
+      const categoryData = dashboardData.categories;
+      const orderData = dashboardData.orders;
+      const reportData = dashboardData.reports;
+      const ticketData = dashboardData.tickets;
+      const profileData = dashboardData.profile;
+      const userData = dashboardData.users;
+      const payoutData = dashboardData.payouts;
+      const validIdData = dashboardData.validId;
+      const validIdReviewData = dashboardData.validIdReview;
+      const subscriptionData = dashboardData.subscription;
 
       setProducts(productData || []);
       setCategories(categoryData || []);
@@ -793,7 +837,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
         payoutAccountNumber: profileData.payoutAccountNumber || '',
       });
     } catch (err) {
-      setError(err.message || 'Unable to load module data.');
+      setError(err.message || 'Unable to load dashboard data.');
     } finally {
       setIsLoading(false);
     }

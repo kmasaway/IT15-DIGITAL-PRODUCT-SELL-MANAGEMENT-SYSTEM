@@ -41,12 +41,18 @@ namespace CoreK.API.Controllers
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> CreateCategory([FromBody] CreateCategoryDto dto)
         {
-            var exists = await _context.Categories.AnyAsync(c => c.CategoryName == dto.CategoryName);
+            var categoryName = dto.CategoryName?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(categoryName))
+            {
+                return BadRequest("Category name is required.");
+            }
+
+            var exists = await _context.Categories.AnyAsync(c => c.CategoryName == categoryName);
             if (exists) return BadRequest("Category name already exists.");
 
             var category = new Category
             {
-                CategoryName = dto.CategoryName.Trim(),
+                CategoryName = categoryName,
                 Description = dto.Description?.Trim()
             };
 
@@ -63,11 +69,17 @@ namespace CoreK.API.Controllers
             var category = await _context.Categories.FindAsync(categoryId);
             if (category == null) return NotFound("Category not found.");
 
+            var categoryName = dto.CategoryName?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(categoryName))
+            {
+                return BadRequest("Category name is required.");
+            }
+
             var exists = await _context.Categories.AnyAsync(c =>
-                c.CategoryId != categoryId && c.CategoryName == dto.CategoryName);
+                c.CategoryId != categoryId && c.CategoryName == categoryName);
             if (exists) return BadRequest("Category name already exists.");
 
-            category.CategoryName = dto.CategoryName.Trim();
+            category.CategoryName = categoryName;
             category.Description = dto.Description?.Trim();
             await _context.SaveChangesAsync();
 

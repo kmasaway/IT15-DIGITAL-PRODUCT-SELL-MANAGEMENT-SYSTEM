@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Data.SqlClient;
 using CoreK.API.Data;
 
 namespace CoreK.API.Controllers
@@ -53,7 +52,7 @@ namespace CoreK.API.Controllers
                     })
                     .ToListAsync();
             }
-            catch (Exception ex) when (IsMissingSellerAccountStorage(ex))
+            catch (Exception ex) when (DatabaseErrorHelper.IsMissingStorage(ex))
             {
                 users = await _context.Users
                     .OrderByDescending(u => u.CreatedAt)
@@ -76,24 +75,6 @@ namespace CoreK.API.Controllers
             }
 
             return Ok(users);
-        }
-
-        private static bool IsMissingSellerAccountStorage(Exception exception)
-        {
-            var currentException = exception;
-
-            while (currentException != null)
-            {
-                if (currentException is SqlException sqlException
-                    && sqlException.Errors.Cast<SqlError>().Any(error => error.Number is 207 or 208))
-                {
-                    return true;
-                }
-
-                currentException = currentException.InnerException;
-            }
-
-            return false;
         }
     }
 }
