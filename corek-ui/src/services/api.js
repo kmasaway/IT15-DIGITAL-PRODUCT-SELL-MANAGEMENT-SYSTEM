@@ -52,7 +52,8 @@ async function request(path, options = {}) {
     throw new Error(
       error instanceof TypeError
         ? 'Unable to reach the CoreK API. Start the backend server, then try again.'
-        : error.message
+        : error.message,
+      { cause: error }
     );
   }
 
@@ -99,6 +100,12 @@ export const api = {
 
   checkout: (payload) => request('/Payments/checkout', { method: 'POST', body: JSON.stringify(payload) }),
   getOrders: (customerId) => request(`/Payments/orders${customerId ? `?customerId=${customerId}` : ''}`),
+  getPayoutRequests: (sellerId) => request(`/Payments/payouts${sellerId ? `?sellerId=${sellerId}` : ''}`),
+  requestPayout: (payload) => request('/Payments/payouts', { method: 'POST', body: JSON.stringify(payload) }),
+  updatePayoutStatus: (payoutRequestId, payload) => request(`/Payments/payouts/${payoutRequestId}/status`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  }),
 
   getReports: () => request('/Reports/summary'),
 

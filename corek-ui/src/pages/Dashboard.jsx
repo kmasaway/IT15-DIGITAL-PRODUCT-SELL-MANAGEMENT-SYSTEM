@@ -14,6 +14,7 @@ import {
   MessageCircle,
   Package,
   Plus,
+  QrCode,
   Save,
   Search,
   Send,
@@ -33,6 +34,7 @@ const MARKETPLACE_PAGE_SIZE = 20;
 const VALID_ID_STORAGE_PREFIX = 'corek_valid_id_';
 const SELLER_SALES_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const API_ASSET_BASE_URL = API_BASE_URL.replace(/\/api\/?$/i, '');
+const PAYOUT_QR_SIZE = 21;
 
 const emptyProductForm = {
   productId: null,
@@ -122,14 +124,6 @@ function formatDate(value) {
 
 function getProductCategory(product) {
   return product.category || product.categoryName || 'Digital Product';
-}
-
-function getProductInitials(product) {
-  const title = product.title || 'Digital Product';
-  const words = title.split(/\s+/).filter(Boolean);
-  const initials = words.slice(0, 2).map((word) => word[0]).join('');
-
-  return initials.toUpperCase() || 'DP';
 }
 
 function getMarketplaceAccent(index) {
@@ -273,7 +267,6 @@ function getProductImageSource(product) {
 
 function getProductSellerDetails(product) {
   const sellerName = product.sellerName || product.SellerName || '';
-  const sellerId = product.sellerId || product.SellerId;
   const sellerPhoneNumber = product.sellerPhoneNumber || product.SellerPhoneNumber || '';
   const sellerProfileName = product.sellerProfileName || product.SellerProfileName || sellerName;
 
@@ -293,6 +286,7 @@ function getOrderSellerName(order) {
 
 function getPayoutQrCells(value) {
   const seed = String(value || 'CoreK payout');
+  const matrix = Array.from({ length: PAYOUT_QR_SIZE }, () => Array(PAYOUT_QR_SIZE).fill(false));
   let hash = 2166136261;
 
   for (let index = 0; index < seed.length; index += 1) {
@@ -300,20 +294,43 @@ function getPayoutQrCells(value) {
     hash = Math.imul(hash, 16777619);
   }
 
-  return Array.from({ length: 81 }, (_, index) => {
-    const row = Math.floor(index / 9);
-    const column = index % 9;
-    const inFinder = (row < 3 && column < 3) || (row < 3 && column > 5) || (row > 5 && column < 3);
-
-    if (inFinder) {
-      const localRow = row % 6;
-      const localColumn = column % 6;
-      return localRow === 0 || localRow === 2 || localColumn === 0 || localColumn === 2;
+  const drawFinder = (top, left) => {
+    for (let row = 0; row < 7; row += 1) {
+      for (let column = 0; column < 7; column += 1) {
+        const isBorder = row === 0 || row === 6 || column === 0 || column === 6;
+        const isCenter = row >= 2 && row <= 4 && column >= 2 && column <= 4;
+        matrix[top + row][left + column] = isBorder || isCenter;
+      }
     }
+  };
 
-    hash = Math.imul(hash ^ (index + 1), 1103515245) + 12345;
-    return (hash & 3) !== 0;
-  });
+  const isReserved = (row, column) => (
+    (row <= 7 && column <= 7) ||
+    (row <= 7 && column >= PAYOUT_QR_SIZE - 8) ||
+    (row >= PAYOUT_QR_SIZE - 8 && column <= 7) ||
+    row === 6 ||
+    column === 6
+  );
+
+  drawFinder(0, 0);
+  drawFinder(0, PAYOUT_QR_SIZE - 7);
+  drawFinder(PAYOUT_QR_SIZE - 7, 0);
+
+  for (let index = 8; index < PAYOUT_QR_SIZE - 8; index += 1) {
+    matrix[6][index] = index % 2 === 0;
+    matrix[index][6] = index % 2 === 0;
+  }
+
+  for (let row = 0; row < PAYOUT_QR_SIZE; row += 1) {
+    for (let column = 0; column < PAYOUT_QR_SIZE; column += 1) {
+      if (isReserved(row, column)) continue;
+
+      hash = Math.imul(hash ^ ((row + 1) * 31 + column + 1), 1103515245) + 12345;
+      matrix[row][column] = (hash & 3) !== 0;
+    }
+  }
+
+  return matrix.flat();
 }
 
 function DashboardModal({ title, subtitle, children, onClose, size = 'regular' }) {
@@ -415,7 +432,9 @@ export default function Dashboard({ user, userSessionName, activeModule: control
   const [sellerAnalyticsTab, setSellerAnalyticsTab] = useState('topProducts');
   const [activeSalesTrendKey, setActiveSalesTrendKey] = useState('');
   const [productReviewRemarks, setProductReviewRemarks] = useState({});
-  const [payoutRequest, setPayoutRequest] = useState(null);
+  const [payoutRequests, setPayoutRequests] = useState([]);
+  const [isPayoutSubmitting, setIsPayoutSubmitting] = useState(false);
+  const [isPayoutQrVisible, setIsPayoutQrVisible] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatDraft, setChatDraft] = useState('');
   const [chatThreads, setChatThreads] = useState([]);
@@ -526,6 +545,11 @@ export default function Dashboard({ user, userSessionName, activeModule: control
   const sellerRevenue = useMemo(
     () => completedRoleOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0),
     [completedRoleOrders]
+  );
+
+  const latestPayoutRequest = useMemo(
+    () => payoutRequests[0] || null,
+    [payoutRequests]
   );
 
   const sellerSalesTrend = useMemo(() => {
@@ -644,7 +668,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     setError('');
 
     try {
-      const [productData, categoryData, orderData, reportData, ticketData, profileData, userData] =
+      const [productData, categoryData, orderData, reportData, ticketData, profileData, userData, payoutData] =
         await Promise.all([
           isSeller ? api.getSellerProducts(userId) : api.getProducts(searchTerm),
           api.getCategories(),
@@ -653,6 +677,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
           api.getTickets(role === 'Customer' ? userId : undefined),
           api.getProfile(userId),
           isAdmin ? api.getUsers() : Promise.resolve([]),
+          isAdmin || isSeller ? api.getPayoutRequests(isSeller ? userId : undefined) : Promise.resolve([]),
         ]);
 
       setProducts(productData || []);
@@ -661,6 +686,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       setReports(reportData || null);
       setTickets(ticketData || []);
       setUsers(userData || []);
+      setPayoutRequests(payoutData || []);
       setProfile({
         fullName: profileData.fullName || displayName,
         email: profileData.email || '',
@@ -716,12 +742,22 @@ export default function Dashboard({ user, userSessionName, activeModule: control
 
   useEffect(() => {
     if (!activeChatThread) {
-      setChatMessages([]);
-      return;
+      let isCancelled = false;
+
+      queueMicrotask(() => {
+        if (!isCancelled) setChatMessages([]);
+      });
+
+      return () => {
+        isCancelled = true;
+      };
     }
 
     let isCancelled = false;
-    setIsChatLoading(true);
+
+    queueMicrotask(() => {
+      if (!isCancelled) setIsChatLoading(true);
+    });
 
     api.getChatMessages(activeChatThread.sellerId, activeChatThread.customerId)
       .then((messages) => {
@@ -763,7 +799,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     setSellerDateFilters({ start: '', end: '' });
   };
 
-  const handleRequestPayout = () => {
+  const handleRequestPayout = async () => {
     if (!profile.payoutAccountName || !profile.payoutAccountNumber) {
       showError('Complete your payout account details before requesting a payout.');
       return;
@@ -774,18 +810,25 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       return;
     }
 
-    const nextRequest = {
-      requestedAt: new Date().toISOString(),
-      amount: sellerRevenue,
-      method: profile.payoutMethod || 'GCash',
-      accountName: profile.payoutAccountName,
-      accountNumber: profile.payoutAccountNumber,
-      range: formatDateRange(sellerDateFilters),
-      status: 'Pending Review',
-    };
+    setIsPayoutSubmitting(true);
 
-    setPayoutRequest(nextRequest);
-    showNotice('Payout request submitted for admin processing.');
+    try {
+      const result = await api.requestPayout({
+        startDate: sellerDateFilters.start || null,
+        endDate: sellerDateFilters.end || null,
+      });
+      const savedPayout = result.payout || result;
+
+      setPayoutRequests((currentRequests) => [
+        savedPayout,
+        ...currentRequests.filter((request) => request.payoutRequestId !== savedPayout.payoutRequestId),
+      ]);
+      showNotice(result.message || 'Payout request submitted for admin processing.');
+    } catch (err) {
+      showError(err.message || 'Unable to request payout.');
+    } finally {
+      setIsPayoutSubmitting(false);
+    }
   };
 
   const handleSendChatMessage = async (event) => {
@@ -2374,9 +2417,8 @@ export default function Dashboard({ user, userSessionName, activeModule: control
 
     return (
     <div className="module-stack">
-      {!isCustomer && (
-      <div className={isAdmin ? 'module-stack' : 'grid-2'}>
-        {!isAdmin && isCustomer && (
+      <div className={isAdmin || isCustomer ? 'module-stack' : 'grid-2'}>
+        {isCustomer && (
           <form className="panel customer-checkout-form" onSubmit={handleCheckout}>
             <h2>Checkout</h2>
 
@@ -2456,28 +2498,46 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                   {renderStatus(profile.payoutAccountNumber ? 'Ready' : 'Missing')}
                 </div>
 
-                {payoutRequest && (
+                {latestPayoutRequest && (
                   <div className="mini-row payout-summary-row">
                     <div>
                       <strong>Latest Request</strong>
-                      <span>{formatDate(payoutRequest.requestedAt)}</span>
+                      <span>
+                        {formatDate(latestPayoutRequest.requestedAt)} - {formatMoney(latestPayoutRequest.amount)}
+                      </span>
                     </div>
-                    {renderStatus(payoutRequest.status)}
+                    {renderStatus(latestPayoutRequest.status)}
                   </div>
                 )}
               </div>
 
               <div className="payout-qr-card">
-                <div className="payout-qr-grid" aria-hidden="true">
-                  {payoutQrCells.map((isFilled, index) => (
-                    <span className={isFilled ? 'filled' : ''} key={`${payoutQrSeed}-${index}`} />
-                  ))}
-                </div>
-                <div>
-                  <strong>Payout QR</strong>
-                  <span>{profile.payoutMethod || 'GCash'}</span>
-                  <small>{profile.payoutAccountNumber || 'Add account number'}</small>
-                </div>
+                {isPayoutQrVisible ? (
+                  <>
+                    <div className="payout-qr-grid" role="img" aria-label="Payout QR code">
+                      {payoutQrCells.map((isFilled, index) => (
+                        <span className={isFilled ? 'filled' : ''} key={`${payoutQrSeed}-${index}`} />
+                      ))}
+                    </div>
+                    <div>
+                      <strong>Payout QR</strong>
+                      <span>{profile.payoutMethod || 'GCash'}</span>
+                      <small>{profile.payoutAccountNumber || 'Add account number'}</small>
+                    </div>
+                  </>
+                ) : (
+                  <button
+                    className="payout-qr-button"
+                    type="button"
+                    onClick={() => setIsPayoutQrVisible(true)}
+                    disabled={!profile.payoutAccountNumber}
+                    title={!profile.payoutAccountNumber ? 'Add payout account number in Profile first.' : undefined}
+                  >
+                    <QrCode size={32} />
+                    <strong>Show QR Code</strong>
+                    <span>{profile.payoutMethod || 'GCash'}</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -2485,15 +2545,16 @@ export default function Dashboard({ user, userSessionName, activeModule: control
               className="button"
               type="button"
               onClick={handleRequestPayout}
-              disabled={!profile.payoutAccountNumber || sellerRevenue <= 0}
+              disabled={isPayoutSubmitting || !profile.payoutAccountNumber || sellerRevenue <= 0}
               title={!profile.payoutAccountNumber ? 'Add payout account number in Profile first.' : undefined}
             >
-              Request Payout
+              {isPayoutSubmitting ? 'Submitting...' : 'Request Payout'}
               <CreditCard size={16} />
             </button>
           </div>
         )}
 
+        {!isCustomer && (
         <div className="panel">
           <div className="panel-title-row">
             <div>
@@ -2525,8 +2586,8 @@ export default function Dashboard({ user, userSessionName, activeModule: control
             {paymentRows.length === 0 && <div className="empty-state">No paid downloads match this view.</div>}
           </div>
         </div>
+        )}
       </div>
-      )}
 
       <div className="panel">
         <div className="panel-title-row payout-records-header">

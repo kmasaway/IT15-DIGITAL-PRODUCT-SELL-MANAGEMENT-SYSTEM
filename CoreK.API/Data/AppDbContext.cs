@@ -14,6 +14,7 @@ namespace CoreK.API.Data
         public DbSet<Product> Products { get; set; }
         public DbSet<ProductVersion> ProductVersions { get; set; }
         public DbSet<Order> Orders { get; set; }
+        public DbSet<PayoutRequest> PayoutRequests { get; set; }
         public DbSet<SupportTicket> SupportTickets { get; set; }
         public DbSet<ChatMessage> ChatMessages { get; set; }
 
@@ -25,6 +26,12 @@ namespace CoreK.API.Data
                 .HasOne(o => o.Product)
                 .WithMany()
                 .HasForeignKey(o => o.ProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<PayoutRequest>()
+                .HasOne(p => p.Seller)
+                .WithMany()
+                .HasForeignKey(p => p.SellerId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<SupportTicket>()

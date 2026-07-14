@@ -20,4 +20,18 @@ namespace CoreK.API.DTOs
         [StringLength(50)]
         public string PaymentMethod { get; set; } = "GCash";
     }
+
+    public class CreatePayoutRequestDto
+    {
+        public DateTime? StartDate { get; set; }
+
+        public DateTime? EndDate { get; set; }
+    }
+
+    public class UpdatePayoutStatusDto
+    {
+        [Required]
+        [StringLength(50)]
+        public string Status { get; set; } = string.Empty;
+    }
 }

@@ -135,5 +135,159 @@ namespace CoreK.API.Controllers
 
             return Ok(orders);
         }
+
+        [HttpGet("payouts")]
+        [Authorize(Roles = "Admin,Seller")]
+        public async Task<IActionResult> GetPayouts([FromQuery] int? sellerId)
+        {
+            var query = _context.PayoutRequests
+                .Include(p => p.Seller)
+                .AsQueryable();
+
+            if (IsSeller)
+            {
+                query = query.Where(p => p.SellerId == CurrentUserId);
+            }
+            else if (sellerId.HasValue)
+            {
+                query = query.Where(p => p.SellerId == sellerId.Value);
+            }
+
+            var payouts = await query
+                .OrderByDescending(p => p.RequestedAt)
+                .ToListAsync();
+
+            return Ok(payouts.Select(p => ToPayoutResponse(p)));
+        }
+
+        [HttpPost("payouts")]
+        [Authorize(Roles = "Seller")]
+        public async Task<IActionResult> CreatePayoutRequest([FromBody] CreatePayoutRequestDto dto)
+        {
+            var seller = await _context.Users.FirstOrDefaultAsync(u => u.UserId == CurrentUserId);
+            if (seller == null) return Unauthorized(new { message = "Seller account was not found." });
+
+            if (string.IsNullOrWhiteSpace(seller.PayoutAccountName) ||
+                string.IsNullOrWhiteSpace(seller.PayoutAccountNumber))
+            {
+                return BadRequest(new { message = "Complete your payout account details before requesting a payout." });
+            }
+
+            var startDate = dto.StartDate?.Date;
+            var endDate = dto.EndDate?.Date;
+
+            if (startDate.HasValue && endDate.HasValue && startDate.Value > endDate.Value)
+            {
+                return BadRequest(new { message = "The payout start date must be before the end date." });
+            }
+
+            var hasPendingRequest = await _context.PayoutRequests.AnyAsync(p =>
+                p.SellerId == CurrentUserId && p.Status == "Pending Review");
+
+            if (hasPendingRequest)
+            {
+                return Conflict(new { message = "You already have a payout request pending admin review." });
+            }
+
+            var completedOrdersQuery = _context.Orders
+                .Include(o => o.Product)
+                .Where(o => o.Product != null &&
+                    o.Product.SellerId == CurrentUserId &&
+                    o.Status == "Completed");
+
+            if (startDate.HasValue)
+            {
+                completedOrdersQuery = completedOrdersQuery.Where(o => o.CreatedAt >= startDate.Value);
+            }
+
+            if (endDate.HasValue)
+            {
+                var exclusiveEndDate = endDate.Value.AddDays(1);
+                completedOrdersQuery = completedOrdersQuery.Where(o => o.CreatedAt < exclusiveEndDate);
+            }
+
+            var payoutAmount = await completedOrdersQuery.SumAsync(o => o.TotalAmount);
+            if (payoutAmount <= 0)
+            {
+                return BadRequest(new { message = "No completed sales are available for payout in the selected date range." });
+            }
+
+            var payoutRequest = new PayoutRequest
+            {
+                SellerId = CurrentUserId,
+                Amount = payoutAmount,
+                PayoutMethod = string.IsNullOrWhiteSpace(seller.PayoutMethod) ? "GCash" : seller.PayoutMethod.Trim(),
+                PayoutAccountName = seller.PayoutAccountName.Trim(),
+                PayoutAccountNumber = seller.PayoutAccountNumber.Trim(),
+                RangeStart = startDate,
+                RangeEnd = endDate,
+                Status = "Pending Review",
+                RequestedAt = DateTime.UtcNow
+            };
+
+            _context.PayoutRequests.Add(payoutRequest);
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                message = "Payout request submitted for admin processing.",
+                payout = ToPayoutResponse(payoutRequest, seller.FullName)
+            });
+        }
+
+        [HttpPut("payouts/{payoutRequestId:int}/status")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> UpdatePayoutStatus(int payoutRequestId, [FromBody] UpdatePayoutStatusDto dto)
+        {
+            var allowedStatuses = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "Pending Review",
+                "Approved",
+                "Released",
+                "Rejected"
+            };
+
+            if (!allowedStatuses.Contains(dto.Status.Trim()))
+            {
+                return BadRequest(new { message = "Payout status must be Pending Review, Approved, Released, or Rejected." });
+            }
+
+            var payoutRequest = await _context.PayoutRequests
+                .Include(p => p.Seller)
+                .FirstOrDefaultAsync(p => p.PayoutRequestId == payoutRequestId);
+
+            if (payoutRequest == null) return NotFound(new { message = "Payout request was not found." });
+
+            payoutRequest.Status = allowedStatuses.First(status =>
+                status.Equals(dto.Status.Trim(), StringComparison.OrdinalIgnoreCase));
+            payoutRequest.ReviewedAt = payoutRequest.Status == "Pending Review" ? null : DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                message = "Payout status updated.",
+                payout = ToPayoutResponse(payoutRequest)
+            });
+        }
+
+        private static object ToPayoutResponse(PayoutRequest request, string? sellerName = null)
+        {
+            return new
+            {
+                request.PayoutRequestId,
+                request.SellerId,
+                SellerName = sellerName ?? request.Seller?.FullName ?? $"Seller #{request.SellerId}",
+                request.Amount,
+                request.PayoutMethod,
+                request.PayoutAccountName,
+                request.PayoutAccountNumber,
+                request.RangeStart,
+                request.RangeEnd,
+                request.Status,
+                request.RequestedAt,
+                request.ReviewedAt
+            };
+        }
     }
 }

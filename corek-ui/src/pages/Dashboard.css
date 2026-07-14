@@ -1687,7 +1687,7 @@
 .payout-qr-card {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: center;
   gap: 12px;
   min-height: 100%;
   border: 1px solid var(--core-border);
@@ -1696,20 +1696,54 @@
   padding: 12px;
 }
 
+.payout-qr-button {
+  width: 100%;
+  min-height: 100%;
+  border: 1px dashed var(--core-mint);
+  border-radius: 10px;
+  background: var(--core-soft);
+  color: var(--core-dark);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 16px 10px;
+  cursor: pointer;
+  font: inherit;
+  text-align: center;
+  transition: border-color 0.2s ease, transform 0.2s ease, background 0.2s ease;
+}
+
+.payout-qr-button:hover:not(:disabled) {
+  background: #ffffff;
+  border-color: var(--core-teal);
+  transform: translateY(-1px);
+}
+
+.payout-qr-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+.payout-qr-button svg {
+  color: var(--core-teal);
+}
+
 .payout-qr-grid {
   aspect-ratio: 1;
   width: 100%;
   display: grid;
-  grid-template-columns: repeat(9, 1fr);
-  gap: 2px;
+  grid-template-columns: repeat(21, 1fr);
+  gap: 1px;
   border: 1px solid var(--core-border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: #ffffff;
-  padding: 8px;
+  padding: 10px;
 }
 
 .payout-qr-grid span {
-  border-radius: 2px;
+  border-radius: 1px;
   background: transparent;
 }
 
