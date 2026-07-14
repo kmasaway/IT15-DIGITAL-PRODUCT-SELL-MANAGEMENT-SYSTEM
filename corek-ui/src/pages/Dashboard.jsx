@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  AlertCircle,
   BarChart3,
   CalendarDays,
   ChevronLeft,
@@ -8,6 +9,7 @@ import {
   CreditCard,
   Download,
   Eye,
+  KeyRound,
   LayoutDashboard,
   Layers,
   LifeBuoy,
@@ -18,7 +20,6 @@ import {
   Save,
   Search,
   Send,
-  ShieldCheck,
   SlidersHorizontal,
   Tags,
   Trash2,
@@ -32,6 +33,7 @@ import './Dashboard.css';
 
 const MARKETPLACE_PAGE_SIZE = 20;
 const VALID_ID_STORAGE_PREFIX = 'corek_valid_id_';
+const SUBSCRIPTION_STORAGE_PREFIX = 'corek_subscription_';
 const SELLER_SALES_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const API_ASSET_BASE_URL = API_BASE_URL.replace(/\/api\/?$/i, '');
 const PAYOUT_QR_SIZE = 21;
@@ -70,7 +72,22 @@ const emptyValidIdForm = {
   idType: 'National ID',
   idNumber: '',
   fileName: '',
+  filePreviewUrl: '',
   file: null,
+};
+
+const emptyPasswordForm = {
+  currentPassword: '',
+  newPassword: '',
+  confirmPassword: '',
+};
+
+const defaultSubscriptionSettings = {
+  plan: 'Professional',
+  billingCycle: 'Monthly',
+  billingEmail: '',
+  seats: '3',
+  autoRenew: true,
 };
 
 const moduleRegistry = {
@@ -184,6 +201,53 @@ function normalizePriceInput(value) {
   const decimalPart = decimalParts.join('').slice(0, 2);
 
   return decimalParts.length > 0 ? `${normalizedWholePart}.${decimalPart}` : normalizedWholePart;
+}
+
+function normalizePhilippinePhoneInput(value) {
+  return String(value ?? '').replace(/\D/g, '').slice(0, 11);
+}
+
+function isPhilippinePhoneNumber(value) {
+  const phoneNumber = String(value || '').trim();
+  return !phoneNumber || /^09\d{9}$/.test(phoneNumber);
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve) => {
+    if (!isImageFile(file)) {
+      resolve('');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => resolve('');
+    reader.readAsDataURL(file);
+  });
+}
+
+function readStoredJson(key, fallbackValue) {
+  try {
+    const storedValue = localStorage.getItem(key);
+    return storedValue ? JSON.parse(storedValue) : fallbackValue;
+  } catch {
+    return fallbackValue;
+  }
+}
+
+function readValidIdReviewRecords() {
+  try {
+    return Object.keys(localStorage)
+      .filter((key) => key.startsWith(VALID_ID_STORAGE_PREFIX))
+      .map((key) => ({
+        ...JSON.parse(localStorage.getItem(key) || '{}'),
+        userId: Number(key.replace(VALID_ID_STORAGE_PREFIX, '')),
+      }))
+      .filter((record) => record.userId && record.fileName)
+      .sort((first, second) => new Date(second.submittedAt || 0) - new Date(first.submittedAt || 0));
+  } catch {
+    return [];
+  }
 }
 
 function getValidPrice(value) {
@@ -411,6 +475,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
   const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
   const [activeTicket, setActiveTicket] = useState(null);
   const [isValidIdModalOpen, setIsValidIdModalOpen] = useState(false);
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
   const [validIdRecord, setValidIdRecord] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem(`${VALID_ID_STORAGE_PREFIX}${userId}`) || 'null');
@@ -419,6 +484,14 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     }
   });
   const [validIdForm, setValidIdForm] = useState(emptyValidIdForm);
+  const [validIdReviewRecords, setValidIdReviewRecords] = useState(() => readValidIdReviewRecords());
+  const [activeValidIdDetails, setActiveValidIdDetails] = useState(null);
+  const [passwordForm, setPasswordForm] = useState(emptyPasswordForm);
+  const [subscriptionSettings, setSubscriptionSettings] = useState(() => ({
+    ...defaultSubscriptionSettings,
+    billingEmail: activeUser.email || activeUser.Email || '',
+    ...readStoredJson(`${SUBSCRIPTION_STORAGE_PREFIX}${userId}`, {}),
+  }));
   const [isLibraryFilterOpen, setIsLibraryFilterOpen] = useState(false);
   const [libraryFilters, setLibraryFilters] = useState({
     start: '',
@@ -446,8 +519,9 @@ export default function Dashboard({ user, userSessionName, activeModule: control
   const [marketplaceSort, setMarketplaceSort] = useState('featured');
   const [marketplacePage, setMarketplacePage] = useState(1);
   const [notice, setNotice] = useState('');
-  const [notificationModalMessage, setNotificationModalMessage] = useState('');
   const [error, setError] = useState('');
+  const [notificationModal, setNotificationModal] = useState(null);
+  const [confirmationRequest, setConfirmationRequest] = useState(null);
   const [, setIsLoading] = useState(false);
   const productImagePreviewUrl = useMemo(
     () => (isImageFile(productForm.coverPhotoFile) ? URL.createObjectURL(productForm.coverPhotoFile) : ''),
@@ -785,14 +859,46 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     if (versionFilePreviewUrl) URL.revokeObjectURL(versionFilePreviewUrl);
   }, [versionFilePreviewUrl]);
 
-  const showNotice = (message) => {
-    setNotice(message);
+  const refreshValidIdReviewRecords = useCallback(() => {
+    setValidIdReviewRecords(readValidIdReviewRecords());
+  }, []);
+
+  const showNotice = (message, detail = '') => {
+    setNotice('');
     setError('');
+    setNotificationModal({
+      tone: 'success',
+      title: message,
+      message: detail || message,
+    });
   };
 
   const showError = (message) => {
-    setError(message);
+    setError('');
     setNotice('');
+    setNotificationModal({
+      tone: 'error',
+      title: 'Entry Error',
+      message: message || 'Please check the form and try again.',
+    });
+  };
+
+  const requestConfirmation = useCallback((options) => (
+    new Promise((resolve) => {
+      setConfirmationRequest({
+        title: options.title || 'Confirm Action',
+        message: options.message || 'Please confirm before continuing.',
+        confirmLabel: options.confirmLabel || 'Confirm',
+        cancelLabel: options.cancelLabel || 'Cancel',
+        tone: options.tone || 'default',
+        resolve,
+      });
+    })
+  ), []);
+
+  const closeConfirmation = (confirmed) => {
+    confirmationRequest?.resolve(confirmed);
+    setConfirmationRequest(null);
   };
 
   const resetSellerDateFilters = () => {
@@ -973,19 +1079,45 @@ export default function Dashboard({ user, userSessionName, activeModule: control
   };
 
   const openValidIdModal = () => {
-    setValidIdForm(validIdRecord ? { ...emptyValidIdForm, ...validIdRecord } : emptyValidIdForm);
+    setValidIdForm(validIdRecord ? { ...emptyValidIdForm, ...validIdRecord, file: null } : emptyValidIdForm);
     setIsValidIdModalOpen(true);
   };
 
-  const handleValidIdSubmit = (event) => {
+  const handleValidIdFileChange = async (event) => {
+    const file = event.target.files?.[0] || null;
+    const filePreviewUrl = await readFileAsDataUrl(file);
+
+    setValidIdForm({
+      ...validIdForm,
+      file,
+      fileName: file?.name || '',
+      filePreviewUrl,
+    });
+  };
+
+  const clearValidIdFile = () => {
+    setValidIdForm({
+      ...validIdForm,
+      file: null,
+      fileName: '',
+      filePreviewUrl: '',
+    });
+  };
+
+  const handleValidIdSubmit = async (event) => {
     event.preventDefault();
 
     const nextRecord = {
+      userId,
+      fullName: profile.fullName || displayName,
+      email: profile.email,
       idType: validIdForm.idType,
       idNumber: validIdForm.idNumber.trim(),
       fileName: validIdForm.file?.name || validIdForm.fileName,
+      filePreviewUrl: validIdForm.filePreviewUrl || validIdRecord?.filePreviewUrl || '',
       status: 'Pending Review',
       submittedAt: new Date().toISOString(),
+      remarks: '',
     };
 
     if (!nextRecord.idNumber || !nextRecord.fileName) {
@@ -993,11 +1125,56 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       return;
     }
 
+    const confirmed = await requestConfirmation({
+      title: 'Submit Valid ID?',
+      message: 'Submit this ID for admin verification. You can still replace it later if needed.',
+      confirmLabel: 'Submit ID',
+    });
+    if (!confirmed) return;
+
     localStorage.setItem(`${VALID_ID_STORAGE_PREFIX}${userId}`, JSON.stringify(nextRecord));
     setValidIdRecord(nextRecord);
     setValidIdForm({ ...emptyValidIdForm, ...nextRecord });
+    refreshValidIdReviewRecords();
     setIsValidIdModalOpen(false);
-    showNotice('Valid ID submitted for review.');
+    showNotice('ID Submitted', 'ID Submitted waiting for verification then the admin will check.');
+  };
+
+  const handleValidIdDecision = async (record, status) => {
+    if (!record?.userId) return;
+
+    let remarks = '';
+    if (status === 'Rejected') {
+      remarks = window.prompt('Add rejection remarks')?.trim() || '';
+      if (!remarks) {
+        showError('Remarks are required when rejecting a valid ID.');
+        return;
+      }
+    }
+
+    const confirmed = await requestConfirmation({
+      title: status === 'Verified' ? 'Accept Valid ID?' : 'Reject Valid ID?',
+      message: status === 'Verified'
+        ? 'Confirm that this valid ID passed admin verification.'
+        : 'Confirm this rejection. The remarks will be saved with the ID record.',
+      confirmLabel: status === 'Verified' ? 'Accept ID' : 'Reject ID',
+      tone: status === 'Rejected' ? 'danger' : 'default',
+    });
+    if (!confirmed) return;
+
+    const nextRecord = {
+      ...record,
+      status,
+      remarks,
+      reviewedAt: new Date().toISOString(),
+    };
+
+    localStorage.setItem(`${VALID_ID_STORAGE_PREFIX}${record.userId}`, JSON.stringify(nextRecord));
+    if (Number(record.userId) === Number(userId)) {
+      setValidIdRecord(nextRecord);
+    }
+    refreshValidIdReviewRecords();
+    showNotice(status === 'Verified' ? 'Valid ID accepted.' : 'Valid ID rejected.', status === 'Rejected' ? remarks : '');
   };
 
   const renderHorizontalChart = (items, valueKey, labelKey, formatValue = (value) => value) => {
@@ -1391,6 +1568,15 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       return;
     }
 
+    if (productForm.productId) {
+      const confirmed = await requestConfirmation({
+        title: 'Save Product?',
+        message: 'Confirm that you want to save the listing changes.',
+        confirmLabel: 'Save Product',
+      });
+      if (!confirmed) return;
+    }
+
     try {
       if (productForm.productId) {
         await api.updateProduct(productForm.productId, {
@@ -1442,7 +1628,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
               String(product.productId) !== String(submittedProduct.productId)
             )),
           ]);
-          setNotificationModalMessage('Requested to Sell');
+          showNotice('Requested to Sell', 'Your request is now shown in the Product Listings table for admin validation.');
           setNotice('');
         } else {
           showNotice('Product uploaded with initial version.');
@@ -1524,11 +1710,33 @@ export default function Dashboard({ user, userSessionName, activeModule: control
   const handleProfileSubmit = async (event) => {
     event.preventDefault();
 
+    if (!profile.fullName?.trim()) {
+      showError('Full name is required.');
+      return;
+    }
+
+    if (!profile.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email)) {
+      showError('Enter a valid email address.');
+      return;
+    }
+
+    if (!isPhilippinePhoneNumber(profile.phoneNumber)) {
+      showError('Phone must be numeric and follow the Philippine 09XXXXXXXXX format.');
+      return;
+    }
+
     if (!isAdmin && !validIdRecord) {
       showError('Submit a valid ID before saving your profile.');
       setIsValidIdModalOpen(true);
       return;
     }
+
+    const confirmed = await requestConfirmation({
+      title: isSeller ? 'Save Account Settings?' : 'Save Profile?',
+      message: 'Please confirm that the account details are correct before saving.',
+      confirmLabel: isSeller ? 'Save Settings' : 'Save Profile',
+    });
+    if (!confirmed) return;
 
     try {
       const result = await api.updateProfile(userId, profile);
@@ -1539,6 +1747,77 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     } catch (err) {
       showError(err.message);
     }
+  };
+
+  const handleChangePasswordSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
+      showError('Complete all password fields.');
+      return;
+    }
+
+    if (passwordForm.newPassword.length < 6) {
+      showError('New password must be at least 6 characters long.');
+      return;
+    }
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      showError('Password confirmation does not match.');
+      return;
+    }
+
+    const confirmed = await requestConfirmation({
+      title: 'Change Password?',
+      message: 'You will use the new password the next time you sign in.',
+      confirmLabel: 'Change Password',
+    });
+    if (!confirmed) return;
+
+    try {
+      await api.updatePassword(userId, {
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+        confirmPassword: passwordForm.confirmPassword,
+      });
+      setPasswordForm(emptyPasswordForm);
+      setIsChangePasswordModalOpen(false);
+      showNotice('Password changed.', 'Your account password has been updated.');
+    } catch (err) {
+      showError(err.message);
+    }
+  };
+
+  const handleSubscriptionSubmit = async (event) => {
+    event.preventDefault();
+
+    const seats = Number(subscriptionSettings.seats);
+    if (!Number.isInteger(seats) || seats < 1 || seats > 50) {
+      showError('Subscription seats must be a whole number from 1 to 50.');
+      return;
+    }
+
+    if (!subscriptionSettings.billingEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(subscriptionSettings.billingEmail)) {
+      showError('Enter a valid billing email for the subscription.');
+      return;
+    }
+
+    const confirmed = await requestConfirmation({
+      title: 'Save Subscription?',
+      message: 'Confirm the ERP subscription settings for this seller account.',
+      confirmLabel: 'Save Subscription',
+    });
+    if (!confirmed) return;
+
+    const nextSubscriptionSettings = {
+      ...subscriptionSettings,
+      seats: String(seats),
+      updatedAt: new Date().toISOString(),
+    };
+
+    localStorage.setItem(`${SUBSCRIPTION_STORAGE_PREFIX}${userId}`, JSON.stringify(nextSubscriptionSettings));
+    setSubscriptionSettings(nextSubscriptionSettings);
+    showNotice('Subscription saved.', 'ERP subscription settings were updated.');
   };
 
   const handleTicketSubmit = async (event) => {
@@ -2133,17 +2412,45 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     );
   };
 
-  const renderNotificationModal = () => (
-    <DashboardModal title={notificationModalMessage} onClose={() => setNotificationModalMessage('')}>
-      <div className="request-notification">
-        <CheckCircle size={30} />
-        <strong>{notificationModalMessage}</strong>
-        <p>Your request is now shown in the Product Listings table for admin validation.</p>
+  const renderNotificationModal = () => {
+    const isError = notificationModal?.tone === 'error';
+    const Icon = isError ? AlertCircle : CheckCircle;
+
+    return (
+      <DashboardModal title={notificationModal?.title || 'Notification'} onClose={() => setNotificationModal(null)}>
+        <div className={`request-notification ${isError ? 'error' : 'success'}`}>
+          <span className="notification-icon-wrap">
+            <Icon size={34} />
+          </span>
+          <strong>{notificationModal?.title}</strong>
+          <p>{notificationModal?.message}</p>
+        </div>
+
+        <div className="toolbar modal-actions">
+          <button className="button" type="button" onClick={() => setNotificationModal(null)}>
+            OK
+          </button>
+        </div>
+      </DashboardModal>
+    );
+  };
+
+  const renderConfirmationModal = () => (
+    <DashboardModal title={confirmationRequest?.title || 'Confirm Action'} onClose={() => closeConfirmation(false)}>
+      <div className="confirmation-copy">
+        <p>{confirmationRequest?.message}</p>
       </div>
 
       <div className="toolbar modal-actions">
-        <button className="button" type="button" onClick={() => setNotificationModalMessage('')}>
-          OK
+        <button
+          className={`button ${confirmationRequest?.tone === 'danger' ? 'danger' : ''}`}
+          type="button"
+          onClick={() => closeConfirmation(true)}
+        >
+          {confirmationRequest?.confirmLabel || 'Confirm'}
+        </button>
+        <button className="button secondary" type="button" onClick={() => closeConfirmation(false)}>
+          {confirmationRequest?.cancelLabel || 'Cancel'}
         </button>
       </div>
     </DashboardModal>
@@ -2236,7 +2543,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                             title="Approve"
                             onClick={() => handleApproveProduct(product)}
                           >
-                            <ShieldCheck size={14} />
+                            <CheckCircle size={14} />
                           </button>
 
                           <button
@@ -2464,7 +2771,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
             <div className="toolbar" style={{ marginTop: 14 }}>
               <button className="button" type="submit">
                 Record Payment
-                <ShieldCheck size={16} />
+                <CheckCircle size={16} />
               </button>
             </div>
           </form>
@@ -2898,6 +3205,8 @@ export default function Dashboard({ user, userSessionName, activeModule: control
               <th>Email</th>
               <th>Role</th>
               <th>Email</th>
+              <th>Valid ID</th>
+              <th>Review</th>
               <th className="number-cell">Products</th>
               <th className="number-cell">Orders</th>
               <th className="number-cell">Tickets</th>
@@ -2912,6 +3221,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
               const email = account.email || account.Email || 'No email';
               const accountRole = account.role || account.Role || 'Customer';
               const isEmailVerified = account.isEmailVerified ?? account.IsEmailVerified;
+              const validIdReview = validIdReviewRecords.find((record) => Number(record.userId) === Number(accountId));
 
               return (
                 <tr key={accountId || email}>
@@ -2921,6 +3231,42 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                   <td>{email}</td>
                   <td>{accountRole}</td>
                   <td>{renderTextStatus(isEmailVerified ? 'Verified' : 'Unverified')}</td>
+                  <td>{renderTextStatus(validIdReview?.status || 'Missing')}</td>
+                  <td className="actions">
+                    {validIdReview ? (
+                      <>
+                        <button
+                          className="button secondary icon-only-button"
+                          type="button"
+                          aria-label={`View valid ID for ${fullName}`}
+                          title="View details"
+                          onClick={() => setActiveValidIdDetails({ ...validIdReview, fullName, email })}
+                        >
+                          <Eye size={14} />
+                        </button>
+                        <button
+                          className="button secondary icon-only-button"
+                          type="button"
+                          aria-label={`Accept valid ID for ${fullName}`}
+                          title="Accept"
+                          onClick={() => handleValidIdDecision({ ...validIdReview, fullName, email }, 'Verified')}
+                        >
+                          <CheckCircle size={14} />
+                        </button>
+                        <button
+                          className="button secondary icon-only-button"
+                          type="button"
+                          aria-label={`Reject valid ID for ${fullName}`}
+                          title="Reject"
+                          onClick={() => handleValidIdDecision({ ...validIdReview, fullName, email }, 'Rejected')}
+                        >
+                          <X size={14} />
+                        </button>
+                      </>
+                    ) : (
+                      <span className="table-note">No ID</span>
+                    )}
+                  </td>
                   <td className="number-cell">{account.productCount || account.ProductCount || 0}</td>
                   <td className="number-cell">{account.orderCount || account.OrderCount || 0}</td>
                   <td className="number-cell">{account.ticketCount || account.TicketCount || 0}</td>
@@ -2931,7 +3277,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
 
             {users.length === 0 && (
               <tr>
-                <td colSpan="8">
+                <td colSpan="10">
                   <div className="empty-state">No users found yet.</div>
                 </td>
               </tr>
@@ -3010,10 +3356,11 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       );
     }
 
-    return (
+    const profileForm = (
       <form
         className={`panel ${isSeller ? 'seller-profile-form' : ''} ${isCustomer ? 'customer-profile-form' : ''}`}
         onSubmit={handleProfileSubmit}
+        noValidate
       >
         <h2>{isSeller ? 'Account Settings' : 'Profile and Payout Details'}</h2>
 
@@ -3040,8 +3387,14 @@ export default function Dashboard({ user, userSessionName, activeModule: control
           <div className="field">
             <label>Phone</label>
             <input
+              inputMode="numeric"
+              maxLength={11}
+              placeholder="09XXXXXXXXX"
               value={profile.phoneNumber}
-              onChange={(e) => setProfile({ ...profile, phoneNumber: e.target.value })}
+              onChange={(e) => setProfile({
+                ...profile,
+                phoneNumber: normalizePhilippinePhoneInput(e.target.value),
+              })}
             />
           </div>
 
@@ -3068,7 +3421,6 @@ export default function Dashboard({ user, userSessionName, activeModule: control
           <div className="field">
             <label>Payout Account Number</label>
             <input
-              className="number-input"
               value={profile.payoutAccountNumber}
               onChange={(e) => setProfile({ ...profile, payoutAccountNumber: e.target.value })}
             />
@@ -3089,7 +3441,6 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                 {renderStatus(validIdRecord?.status || 'Required')}
                 <button className="button secondary" type="button" onClick={openValidIdModal}>
                   {validIdRecord ? 'Update ID' : 'Add Valid ID'}
-                  <ShieldCheck size={16} />
                 </button>
               </div>
             </div>
@@ -3103,21 +3454,128 @@ export default function Dashboard({ user, userSessionName, activeModule: control
 
         <div className="toolbar" style={{ marginTop: 14 }}>
           <button className="button" type="submit">
-            Save Profile
+            {isSeller ? 'Save Settings' : 'Save Profile'}
             <Save size={16} />
           </button>
         </div>
       </form>
+    );
+
+    if (!isSeller) return profileForm;
+
+    return (
+      <div className="module-stack seller-account-settings">
+        {profileForm}
+
+        <form className="panel subscription-settings-panel" onSubmit={handleSubscriptionSubmit} noValidate>
+          <div className="panel-title-row">
+            <div>
+              <h2>Subscription</h2>
+              <p>ERP access, billing cycle, and team seat controls for this seller workspace.</p>
+            </div>
+            <CreditCard size={20} />
+          </div>
+
+          <div className="subscription-summary-grid">
+            <div>
+              <span>Current Plan</span>
+              <strong>{subscriptionSettings.plan}</strong>
+            </div>
+            <div>
+              <span>Billing</span>
+              <strong>{subscriptionSettings.billingCycle}</strong>
+            </div>
+            <div>
+              <span>Seats</span>
+              <strong>{subscriptionSettings.seats}</strong>
+            </div>
+          </div>
+
+          <div className="form-grid subscription-form-grid">
+            <div className="field">
+              <label>Plan</label>
+              <select
+                value={subscriptionSettings.plan}
+                onChange={(e) => setSubscriptionSettings({ ...subscriptionSettings, plan: e.target.value })}
+              >
+                <option value="Starter">Starter</option>
+                <option value="Professional">Professional</option>
+                <option value="Enterprise">Enterprise</option>
+              </select>
+            </div>
+
+            <div className="field">
+              <label>Billing Cycle</label>
+              <select
+                value={subscriptionSettings.billingCycle}
+                onChange={(e) => setSubscriptionSettings({ ...subscriptionSettings, billingCycle: e.target.value })}
+              >
+                <option value="Monthly">Monthly</option>
+                <option value="Quarterly">Quarterly</option>
+                <option value="Annual">Annual</option>
+              </select>
+            </div>
+
+            <div className="field">
+              <label>Billing Email</label>
+              <input
+                type="email"
+                value={subscriptionSettings.billingEmail}
+                onChange={(e) => setSubscriptionSettings({ ...subscriptionSettings, billingEmail: e.target.value })}
+              />
+            </div>
+
+            <div className="field">
+              <label>Workspace Seats</label>
+              <input
+                inputMode="numeric"
+                value={subscriptionSettings.seats}
+                onChange={(e) => setSubscriptionSettings({
+                  ...subscriptionSettings,
+                  seats: String(e.target.value).replace(/\D/g, '').slice(0, 2),
+                })}
+              />
+            </div>
+
+            <label className="field checkbox-row subscription-renewal-toggle">
+              <input
+                type="checkbox"
+                checked={subscriptionSettings.autoRenew}
+                onChange={(e) => setSubscriptionSettings({ ...subscriptionSettings, autoRenew: e.target.checked })}
+              />
+              <span>Auto-renew subscription</span>
+            </label>
+          </div>
+
+          <div className="toolbar" style={{ marginTop: 14 }}>
+            <button className="button" type="submit">
+              Save Subscription
+              <Save size={16} />
+            </button>
+          </div>
+        </form>
+
+        <div className="panel account-security-panel">
+          <div>
+            <h2>Security</h2>
+            <p>Change the password used to access this seller ERP workspace.</p>
+          </div>
+          <button className="button secondary" type="button" onClick={() => setIsChangePasswordModalOpen(true)}>
+            Change Password
+            <KeyRound size={16} />
+          </button>
+        </div>
+      </div>
     );
   };
 
   const renderValidIdModal = () => (
     <DashboardModal
       title="Valid ID"
-      subtitle="Submit a government or school ID for profile verification."
+      subtitle="Submit a government ID for profile verification."
       onClose={() => setIsValidIdModalOpen(false)}
     >
-      <form onSubmit={handleValidIdSubmit}>
+      <form className="valid-id-form" onSubmit={handleValidIdSubmit} noValidate>
         <div className="form-grid">
           <div className="field">
             <label>ID Type</label>
@@ -3128,7 +3586,6 @@ export default function Dashboard({ user, userSessionName, activeModule: control
               <option value="National ID">National ID</option>
               <option value="Driver's License">Driver's License</option>
               <option value="Passport">Passport</option>
-              <option value="School ID">School ID</option>
               <option value="UMID">UMID</option>
             </select>
           </div>
@@ -3145,28 +3602,177 @@ export default function Dashboard({ user, userSessionName, activeModule: control
           <div className="field full">
             <label>ID File</label>
             <input
+              key={validIdForm.fileName || 'valid-id-empty-file'}
               type="file"
               accept="image/*,.pdf"
-              onChange={(e) => setValidIdForm({
-                ...validIdForm,
-                file: e.target.files?.[0] || null,
-                fileName: e.target.files?.[0]?.name || validIdForm.fileName,
-              })}
+              onChange={handleValidIdFileChange}
             />
-            {validIdForm.fileName && <span className="field-note">Selected: {validIdForm.fileName}</span>}
+            {validIdForm.fileName && (
+              <div className="valid-id-file-preview">
+                <div className="valid-id-preview-frame">
+                  {validIdForm.filePreviewUrl ? (
+                    <img src={validIdForm.filePreviewUrl} alt="Valid ID preview" />
+                  ) : (
+                    <div className="upload-preview-file">{validIdForm.fileName}</div>
+                  )}
+                  <button
+                    className="upload-preview-remove"
+                    type="button"
+                    aria-label="Remove selected valid ID file"
+                    onClick={clearValidIdFile}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+                <span className="field-note">{validIdForm.fileName}</span>
+              </div>
+            )}
           </div>
         </div>
 
         <div className="toolbar modal-actions">
           <button className="button" type="submit">
             Submit ID
-            <ShieldCheck size={16} />
           </button>
           <button className="button secondary" type="button" onClick={() => setIsValidIdModalOpen(false)}>
             Cancel
           </button>
         </div>
       </form>
+    </DashboardModal>
+  );
+
+  const renderChangePasswordModal = () => (
+    <DashboardModal
+      title="Change Password"
+      subtitle="Update the password for this seller account."
+      onClose={() => {
+        setPasswordForm(emptyPasswordForm);
+        setIsChangePasswordModalOpen(false);
+      }}
+    >
+      <form className="change-password-form" onSubmit={handleChangePasswordSubmit} noValidate>
+        <div className="form-grid">
+          <div className="field full">
+            <label>Current Password</label>
+            <input
+              required
+              type="password"
+              value={passwordForm.currentPassword}
+              onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+            />
+          </div>
+
+          <div className="field">
+            <label>New Password</label>
+            <input
+              required
+              minLength={6}
+              type="password"
+              value={passwordForm.newPassword}
+              onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+            />
+          </div>
+
+          <div className="field">
+            <label>Confirm Password</label>
+            <input
+              required
+              minLength={6}
+              type="password"
+              value={passwordForm.confirmPassword}
+              onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+            />
+          </div>
+        </div>
+
+        <div className="toolbar modal-actions">
+          <button className="button" type="submit">
+            Change Password
+            <KeyRound size={16} />
+          </button>
+          <button
+            className="button secondary"
+            type="button"
+            onClick={() => {
+              setPasswordForm(emptyPasswordForm);
+              setIsChangePasswordModalOpen(false);
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    </DashboardModal>
+  );
+
+  const renderValidIdDetailsModal = () => (
+    <DashboardModal
+      title="Valid ID Details"
+      subtitle={activeValidIdDetails?.fullName || activeValidIdDetails?.email}
+      onClose={() => setActiveValidIdDetails(null)}
+    >
+      <div className="valid-id-detail-stack">
+        <div className="mini-row">
+          <div>
+            <strong>Account</strong>
+            <span>{activeValidIdDetails?.fullName || 'Unknown user'}</span>
+          </div>
+          {renderStatus(activeValidIdDetails?.status || 'Pending Review')}
+        </div>
+
+        <div className="mini-row">
+          <div>
+            <strong>ID Type</strong>
+            <span>{activeValidIdDetails?.idType || 'Not provided'}</span>
+          </div>
+          <div>
+            <strong>ID Number</strong>
+            <span>{activeValidIdDetails?.idNumber || 'Not provided'}</span>
+          </div>
+        </div>
+
+        <div className="valid-id-detail-preview">
+          {activeValidIdDetails?.filePreviewUrl ? (
+            <img src={activeValidIdDetails.filePreviewUrl} alt="Submitted valid ID" />
+          ) : (
+            <div className="upload-preview-file">{activeValidIdDetails?.fileName || 'No file preview available'}</div>
+          )}
+          <span>{activeValidIdDetails?.fileName || 'No file attached'}</span>
+        </div>
+
+        {activeValidIdDetails?.remarks && (
+          <div className="ticket-message-box">
+            <strong>Remarks</strong>
+            <p>{activeValidIdDetails.remarks}</p>
+          </div>
+        )}
+      </div>
+
+      <div className="toolbar modal-actions">
+        <button
+          className="button"
+          type="button"
+          onClick={() => {
+            handleValidIdDecision(activeValidIdDetails, 'Verified');
+            setActiveValidIdDetails(null);
+          }}
+        >
+          Accept
+          <CheckCircle size={16} />
+        </button>
+        <button
+          className="button secondary"
+          type="button"
+          onClick={() => {
+            handleValidIdDecision(activeValidIdDetails, 'Rejected');
+            setActiveValidIdDetails(null);
+          }}
+        >
+          Reject
+          <X size={16} />
+        </button>
+      </div>
     </DashboardModal>
   );
 
@@ -3614,10 +4220,13 @@ export default function Dashboard({ user, userSessionName, activeModule: control
 
       {isProductModalOpen && renderProductListingModal()}
       {activeProductView && renderProductViewModal()}
-      {notificationModalMessage && renderNotificationModal()}
+      {notificationModal && renderNotificationModal()}
+      {confirmationRequest && renderConfirmationModal()}
       {isTicketModalOpen && renderSupportTicketModal()}
       {activeTicket && renderTicketDetailsModal()}
       {isValidIdModalOpen && renderValidIdModal()}
+      {isChangePasswordModalOpen && renderChangePasswordModal()}
+      {activeValidIdDetails && renderValidIdDetailsModal()}
       {isLibraryFilterOpen && renderLibraryFilterModal()}
       {(isSeller || isCustomer) && renderChatboxMessenger()}
     </div>

@@ -97,6 +97,10 @@ export const api = {
     method: 'PUT',
     body: JSON.stringify(payload),
   }),
+  updatePassword: (userId, payload) => request(`/Profile/${userId}/password`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  }),
 
   checkout: (payload) => request('/Payments/checkout', { method: 'POST', body: JSON.stringify(payload) }),
   getOrders: (customerId) => request(`/Payments/orders${customerId ? `?customerId=${customerId}` : ''}`),

@@ -28,4 +28,18 @@ namespace CoreK.API.DTOs
         public string? PayoutAccountNumber { get; set; }
 
     }
+
+    public class ChangePasswordDto
+    {
+        [Required]
+        public string CurrentPassword { get; set; } = string.Empty;
+
+        [Required]
+        [MinLength(6, ErrorMessage = "New password must be at least 6 characters long.")]
+        public string NewPassword { get; set; } = string.Empty;
+
+        [Required]
+        [Compare(nameof(NewPassword), ErrorMessage = "Password confirmation does not match.")]
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
 }

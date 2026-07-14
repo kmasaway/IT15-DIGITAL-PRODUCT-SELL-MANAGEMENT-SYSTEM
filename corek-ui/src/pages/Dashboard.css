@@ -1576,8 +1576,28 @@
   text-align: center;
 }
 
-.request-notification svg {
+.notification-icon-wrap {
+  width: 62px;
+  height: 62px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #eefbf7;
+  animation: notification-pop 520ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.request-notification svg,
+.request-notification.success svg {
   color: var(--core-teal);
+}
+
+.request-notification.error .notification-icon-wrap {
+  background: #fff5f5;
+}
+
+.request-notification.error svg {
+  color: #a83a3a;
 }
 
 .request-notification strong {
@@ -1593,6 +1613,35 @@
   font-size: 0.9rem;
   font-weight: 650;
   line-height: 1.45;
+}
+
+.confirmation-copy {
+  border: 1px solid var(--core-border);
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.confirmation-copy p {
+  margin: 0;
+  color: var(--core-text);
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+@keyframes notification-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.72);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* ANALYTICS */
@@ -2252,6 +2301,133 @@
   flex-wrap: wrap;
 }
 
+.seller-account-settings {
+  max-width: 980px;
+}
+
+.subscription-settings-panel,
+.account-security-panel {
+  min-width: 0;
+}
+
+.subscription-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.subscription-summary-grid > div {
+  min-height: 82px;
+  border: 1px solid var(--core-border);
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.subscription-summary-grid span {
+  display: block;
+  color: var(--core-muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.subscription-summary-grid strong {
+  display: block;
+  margin-top: 16px;
+  color: var(--core-dark);
+  font-size: 1rem;
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subscription-form-grid {
+  margin-top: 10px;
+}
+
+.subscription-renewal-toggle {
+  justify-content: flex-start;
+  grid-column: 1 / -1;
+}
+
+.subscription-renewal-toggle span {
+  color: var(--core-text);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.account-security-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.account-security-panel h2 {
+  margin-bottom: 4px;
+}
+
+.account-security-panel p {
+  margin: 0;
+  color: var(--core-muted);
+  font-size: 0.85rem;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.valid-id-form .field input,
+.valid-id-form .field select {
+  background: transparent;
+}
+
+.valid-id-file-preview,
+.valid-id-detail-preview {
+  width: min(280px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.valid-id-preview-frame,
+.valid-id-detail-preview {
+  position: relative;
+}
+
+.valid-id-preview-frame img,
+.valid-id-detail-preview img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border: 1px solid var(--core-border);
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.valid-id-preview-frame .upload-preview-file,
+.valid-id-detail-preview .upload-preview-file {
+  aspect-ratio: 4 / 3;
+}
+
+.valid-id-detail-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.valid-id-detail-preview span {
+  color: var(--core-muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .ticket-detail-stack {
   display: flex;
   flex-direction: column;
@@ -2593,7 +2769,8 @@ input[type='number'] {
   .grid-4,
   .form-grid,
   .content-upload-grid,
-  .product-listings-header {
+  .product-listings-header,
+  .subscription-summary-grid {
     grid-template-columns: 1fr;
   }
 
@@ -2766,7 +2943,8 @@ input[type='number'] {
   .listing-command-panel,
   .support-command-panel,
   .report-export-panel,
-  .identity-card {
+  .identity-card,
+  .account-security-panel {
     align-items: stretch;
     flex-direction: column;
   }
