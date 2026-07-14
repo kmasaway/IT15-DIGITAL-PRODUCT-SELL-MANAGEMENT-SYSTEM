@@ -4,6 +4,7 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  CheckCircle,
   CreditCard,
   Download,
   Eye,
@@ -17,7 +18,6 @@ import {
   Search,
   Send,
   ShieldCheck,
-  ShoppingBag,
   SlidersHorizontal,
   Tags,
   Trash2,
@@ -26,20 +26,13 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { api } from '../services/api';
+import { API_BASE_URL, api } from '../services/api';
 import './Dashboard.css';
 
-const MARKETPLACE_PAGE_SIZE = 6;
+const MARKETPLACE_PAGE_SIZE = 20;
 const VALID_ID_STORAGE_PREFIX = 'corek_valid_id_';
-const SELLER_STATIC_SALES_GRAPH = [
-  { label: 'Jan', sales: 12500, color: '#00bfa5' },
-  { label: 'Feb', sales: 18600, color: '#4f7cff' },
-  { label: 'Mar', sales: 14200, color: '#f0a94b' },
-  { label: 'Apr', sales: 23400, color: '#00bfa5' },
-  { label: 'May', sales: 19800, color: '#4f7cff' },
-  { label: 'Jun', sales: 27600, color: '#f0a94b' },
-];
-const SELLER_STATIC_SALES_GRAPH_MAX = Math.max(...SELLER_STATIC_SALES_GRAPH.map((point) => point.sales));
+const SELLER_SALES_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const API_ASSET_BASE_URL = API_BASE_URL.replace(/\/api\/?$/i, '');
 
 const emptyProductForm = {
   productId: null,
@@ -204,6 +197,125 @@ function getValidPrice(value) {
   return Number.isFinite(price) && price > 0 ? price : null;
 }
 
+function getAssetUrl(source) {
+  if (!source) return '';
+
+  const normalizedSource = String(source).trim().replaceAll('\\', '/');
+  if (!normalizedSource) return '';
+  if (/^(https?:|data:|blob:)/i.test(normalizedSource)) return normalizedSource;
+
+  const uploadsIndex = normalizedSource.toLowerCase().lastIndexOf('/uploads/');
+  if (uploadsIndex >= 0) {
+    return `${API_ASSET_BASE_URL}${normalizedSource.slice(uploadsIndex)}`;
+  }
+
+  if (/^[a-z]:\//i.test(normalizedSource)) {
+    const fileName = normalizedSource.split('/').pop();
+    return fileName ? `${API_ASSET_BASE_URL}/uploads/${encodeURIComponent(fileName)}` : '';
+  }
+
+  return normalizedSource.startsWith('/')
+    ? `${API_ASSET_BASE_URL}${normalizedSource}`
+    : `${API_ASSET_BASE_URL}/${normalizedSource}`;
+}
+
+function isImageSource(source) {
+  const value = String(source || '').trim();
+  return /^data:image\//i.test(value)
+    || /\.(apng|avif|bmp|gif|jpe?g|png|svg|webp)([#?].*)?$/i.test(value);
+}
+
+function getProductImageSource(product) {
+  const directSource =
+    product.thumbnailUrl
+      || product.ThumbnailUrl
+      || product.coverPhotoUrl
+      || product.CoverPhotoUrl
+      || product.imageUrl
+      || product.ImageUrl;
+
+  if (directSource) {
+    return getAssetUrl(directSource);
+  }
+
+  const topLevelFileSource = [
+    product.fileUrl,
+    product.FileUrl,
+    product.secureFilePath,
+    product.SecureFilePath,
+    product.filePath,
+    product.FilePath,
+  ]
+    .find(isImageSource);
+
+  if (topLevelFileSource) {
+    return getAssetUrl(topLevelFileSource);
+  }
+
+  const versions = product.versions || product.Versions || [];
+  const versionFileSource = versions
+    .map((version) => version.thumbnailUrl
+      || version.ThumbnailUrl
+      || version.coverPhotoUrl
+      || version.CoverPhotoUrl
+      || version.imageUrl
+      || version.ImageUrl
+      || version.fileUrl
+      || version.FileUrl
+      || version.secureFilePath
+      || version.SecureFilePath
+      || version.filePath
+      || version.FilePath)
+    .find(isImageSource);
+
+  return getAssetUrl(versionFileSource);
+}
+
+function getProductSellerDetails(product) {
+  const sellerName = product.sellerName || product.SellerName || '';
+  const sellerId = product.sellerId || product.SellerId;
+  const sellerPhoneNumber = product.sellerPhoneNumber || product.SellerPhoneNumber || '';
+  const sellerProfileName = product.sellerProfileName || product.SellerProfileName || sellerName;
+
+  return {
+    contactNo: sellerPhoneNumber || '',
+    profileName: sellerProfileName || 'CoreK Seller',
+  };
+}
+
+function getOrderSellerName(order) {
+  return order.sellerName
+    || order.SellerName
+    || order.sellerProfileName
+    || order.SellerProfileName
+    || (order.sellerId || order.SellerId ? `Seller #${order.sellerId || order.SellerId}` : 'Seller User');
+}
+
+function getPayoutQrCells(value) {
+  const seed = String(value || 'CoreK payout');
+  let hash = 2166136261;
+
+  for (let index = 0; index < seed.length; index += 1) {
+    hash ^= seed.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return Array.from({ length: 81 }, (_, index) => {
+    const row = Math.floor(index / 9);
+    const column = index % 9;
+    const inFinder = (row < 3 && column < 3) || (row < 3 && column > 5) || (row > 5 && column < 3);
+
+    if (inFinder) {
+      const localRow = row % 6;
+      const localColumn = column % 6;
+      return localRow === 0 || localRow === 2 || localColumn === 0 || localColumn === 2;
+    }
+
+    hash = Math.imul(hash ^ (index + 1), 1103515245) + 12345;
+    return (hash & 3) !== 0;
+  });
+}
+
 function DashboardModal({ title, subtitle, children, onClose, size = 'regular' }) {
   return (
     <div className="dashboard-modal-backdrop" role="presentation">
@@ -225,7 +337,7 @@ function DashboardModal({ title, subtitle, children, onClose, size = 'regular' }
   );
 }
 
-export default function Dashboard({ user, userSessionName }) {
+export default function Dashboard({ user, userSessionName, activeModule: controlledActiveModule, onActiveModuleChange }) {
   const activeUser = user || {};
   const userId = activeUser.userId || activeUser.UserId || 1;
   const role = activeUser.role || activeUser.Role || 'Customer';
@@ -241,8 +353,18 @@ export default function Dashboard({ user, userSessionName }) {
   const isSeller = normalizedRole === 'Seller';
   const isCustomer = normalizedRole === 'Customer';
   const displayName = activeUser.fullName || activeUser.FullName || userSessionName || 'CoreK User';
+  const firstName = displayName.split(/\s+/).filter(Boolean)[0] || displayName;
 
-  const [activeModule, setActiveModule] = useState('overview');
+  const [internalActiveModule, setInternalActiveModule] = useState('overview');
+  const activeModule = controlledActiveModule || internalActiveModule;
+  const setActiveModule = useCallback((nextModule) => {
+    if (onActiveModuleChange) {
+      onActiveModuleChange(nextModule);
+      return;
+    }
+
+    setInternalActiveModule(nextModule);
+  }, [onActiveModuleChange]);
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -282,14 +404,16 @@ export default function Dashboard({ user, userSessionName }) {
   const [validIdForm, setValidIdForm] = useState(emptyValidIdForm);
   const [isLibraryFilterOpen, setIsLibraryFilterOpen] = useState(false);
   const [libraryFilters, setLibraryFilters] = useState({
-    status: 'all',
-    category: 'all',
+    start: '',
+    end: '',
   });
   const [sellerDateFilters, setSellerDateFilters] = useState({
     start: '',
     end: '',
   });
+  const [sellerDashboardTab, setSellerDashboardTab] = useState('salesGraph');
   const [sellerAnalyticsTab, setSellerAnalyticsTab] = useState('topProducts');
+  const [activeSalesTrendKey, setActiveSalesTrendKey] = useState('');
   const [productReviewRemarks, setProductReviewRemarks] = useState({});
   const [payoutRequest, setPayoutRequest] = useState(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -404,26 +528,45 @@ export default function Dashboard({ user, userSessionName }) {
     [completedRoleOrders]
   );
 
-  const libraryCategoryOptions = useMemo(() => {
-    const orderCategories = Array.from(new Set(roleOrders.map((order) => order.category || 'Digital Product')));
+  const sellerSalesTrend = useMemo(() => {
+    const monthlySales = SELLER_SALES_MONTHS.map((label, index) => ({
+      key: String(index),
+      label,
+      orders: 0,
+      percentage: 0,
+      sales: 0,
+    }));
 
-    return [
-      { value: 'all', label: 'All categories' },
-      ...orderCategories.map((category) => ({ value: category, label: category })),
-    ];
-  }, [roleOrders]);
+    completedRoleOrders.forEach((order) => {
+      const orderDate = new Date(order.createdAt);
+      if (Number.isNaN(orderDate.getTime())) return;
+
+      const month = orderDate.getMonth();
+      monthlySales[month].orders += 1;
+      monthlySales[month].sales += Number(order.totalAmount || 0);
+    });
+
+    const totalSales = monthlySales.reduce((sum, month) => sum + month.sales, 0);
+
+    return monthlySales.map((month) => ({
+      ...month,
+      percentage: totalSales > 0 ? (month.sales / totalSales) * 100 : 0,
+    }));
+  }, [completedRoleOrders]);
+
+  const activeSalesTrendPoint = useMemo(
+    () => sellerSalesTrend.find((point) => point.key === activeSalesTrendKey)
+      || sellerSalesTrend.find((point) => point.sales > 0)
+      || sellerSalesTrend[0]
+      || null,
+    [activeSalesTrendKey, sellerSalesTrend]
+  );
 
   const filteredLibraryOrders = useMemo(() => {
     if (isSeller) return dateFilteredRoleOrders;
     if (!isCustomer) return roleOrders;
 
-    return roleOrders.filter((order) => {
-      const matchesStatus = libraryFilters.status === 'all' || order.status === libraryFilters.status;
-      const matchesCategory = libraryFilters.category === 'all'
-        || (order.category || 'Digital Product') === libraryFilters.category;
-
-      return matchesStatus && matchesCategory;
-    });
+    return roleOrders.filter((order) => isWithinDateRange(order.createdAt, libraryFilters));
   }, [dateFilteredRoleOrders, isCustomer, isSeller, libraryFilters, roleOrders]);
 
   const marketplaceCategoryOptions = useMemo(() => {
@@ -733,6 +876,46 @@ export default function Dashboard({ user, userSessionName }) {
     setIsProductModalOpen(true);
   };
 
+  const openProductViewModal = async (product) => {
+    if (!product?.productId) {
+      setActiveProductView(product);
+      return;
+    }
+
+    const fallbackVersions = product.versions || product.Versions || [];
+
+    try {
+      const productDetails = await api.getProduct(product.productId);
+      const detailVersions = productDetails.versions || productDetails.Versions || [];
+
+      setActiveProductView({
+        ...product,
+        ...productDetails,
+        versionCount: productDetails.versionCount
+          ?? product.versionCount
+          ?? detailVersions.length
+          ?? fallbackVersions.length
+          ?? 0,
+        latestVersion: productDetails.latestVersion
+          || product.latestVersion
+          || detailVersions[0]?.versionNumber
+          || fallbackVersions[0]?.versionNumber
+          || '1.0.0',
+        thumbnailUrl: productDetails.thumbnailUrl || product.thumbnailUrl,
+        coverPhotoUrl: productDetails.coverPhotoUrl || product.coverPhotoUrl,
+        sellerName: productDetails.sellerName || product.sellerName,
+        SellerName: productDetails.SellerName || product.SellerName,
+        sellerPhoneNumber: productDetails.sellerPhoneNumber || product.sellerPhoneNumber,
+        SellerPhoneNumber: productDetails.SellerPhoneNumber || product.SellerPhoneNumber,
+        sellerProfileName: productDetails.sellerProfileName || product.sellerProfileName,
+        SellerProfileName: productDetails.SellerProfileName || product.SellerProfileName,
+        versions: detailVersions.length > 0 ? detailVersions : fallbackVersions,
+      });
+    } catch {
+      setActiveProductView(product);
+    }
+  };
+
   const openVersionModal = (productId = '') => {
     setVersionForm({ ...emptyVersionForm, productId: productId ? String(productId) : '' });
     setProductModalMode('version');
@@ -809,16 +992,20 @@ export default function Dashboard({ user, userSessionName }) {
   const renderSellerDateFilter = (title = 'Date Filter', options = {}) => {
     if (!isSeller) return null;
 
-    const className = options.plain
-      ? 'seller-date-filter seller-dashboard-section'
-      : 'panel seller-date-filter';
+    const className = [
+      options.plain ? 'seller-date-filter seller-dashboard-section' : 'panel seller-date-filter',
+      options.compact ? 'seller-date-filter-compact' : '',
+      options.controlsOnly ? 'seller-date-filter-controls-only' : '',
+    ].filter(Boolean).join(' ');
 
     return (
       <div className={className}>
-        <div>
-          <h2>{title}</h2>
-          <p>{formatDateRange(sellerDateFilters)}</p>
-        </div>
+        {!options.controlsOnly && (
+          <div>
+            <h2>{title}</h2>
+            <p>{formatDateRange(sellerDateFilters)}</p>
+          </div>
+        )}
 
         <div className="date-filter-controls">
           <label>
@@ -839,53 +1026,163 @@ export default function Dashboard({ user, userSessionName }) {
             />
           </label>
 
-          <button className="button secondary" type="button" onClick={resetSellerDateFilters}>
-            Reset
-            <CalendarDays size={16} />
-          </button>
+          {!options.controlsOnly && (
+            <button className="button secondary" type="button" onClick={resetSellerDateFilters}>
+              Reset
+              <CalendarDays size={16} />
+            </button>
+          )}
         </div>
       </div>
     );
   };
 
-  const renderStaticSalesGraph = () => (
-    <section className="panel seller-sales-graph" aria-labelledby="seller-sales-graph-title">
-      <div className="panel-title-row">
-        <div>
-          <h2 id="seller-sales-graph-title">Sales Graph</h2>
-          <p>Monthly sales trend</p>
+  const renderSellerSalesTrendChart = () => {
+    const hasSales = sellerSalesTrend.some((point) => point.sales > 0);
+    const maxPercentage = Math.max(...sellerSalesTrend.map((point) => point.percentage), 1);
+    const formatPercentage = (value) => {
+      const roundedValue = Number(value || 0).toFixed(value >= 10 ? 1 : 1);
+      return `${roundedValue.replace(/\.0$/, '')}%`;
+    };
+
+    if (!hasSales) {
+      return <div className="empty-state">No completed sales in this date range yet.</div>;
+    }
+
+    return (
+      <div className="sales-trend-chart" aria-label="Monthly sales graph from completed seller orders">
+        <div className="sales-trend-months" aria-hidden="true">
+          {sellerSalesTrend.map((point) => <span key={point.key}>{point.label}</span>)}
         </div>
-        <BarChart3 size={20} />
+
+        <div className="sales-trend-plot" role="group" aria-label="Interactive monthly sales percentages">
+          <div className="sales-trend-grid" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+            <span />
+            <span />
+          </div>
+
+          {sellerSalesTrend.map((point) => {
+            const height = point.percentage > 0
+              ? Math.max(6, Math.round((point.percentage / maxPercentage) * 100))
+              : 0;
+            const isActive = activeSalesTrendKey === point.key;
+
+            return (
+              <button
+                className={`sales-trend-column ${isActive ? 'active' : ''}`}
+                key={point.key}
+                type="button"
+                style={{ '--sales-bar-height': `${height}%` }}
+                onMouseEnter={() => setActiveSalesTrendKey(point.key)}
+                onFocus={() => setActiveSalesTrendKey(point.key)}
+                onClick={() => setActiveSalesTrendKey(point.key)}
+                aria-label={`${point.label}: ${formatPercentage(point.percentage)}, ${formatMoney(point.sales)}, ${point.orders} orders`}
+              >
+                {point.percentage > 0 && <strong>{formatPercentage(point.percentage)}</strong>}
+                <span className="sales-trend-bar" />
+                <span className="sales-trend-tooltip">
+                  <span>{point.label}</span>
+                  <b>{formatMoney(point.sales)}</b>
+                  <small>{point.orders} orders</small>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {activeSalesTrendPoint && (
+          <div className="sales-trend-inspector" aria-live="polite">
+            <span>{activeSalesTrendPoint.label}</span>
+            <strong>{formatPercentage(activeSalesTrendPoint.percentage)}</strong>
+            <small>{formatMoney(activeSalesTrendPoint.sales)} / {activeSalesTrendPoint.orders} orders</small>
+          </div>
+        )}
       </div>
+    );
+  };
 
-      <div className="static-sales-chart" role="img" aria-label="Static monthly sales graph">
-        {SELLER_STATIC_SALES_GRAPH.map((point) => {
-          const height = Math.max(10, Math.round((point.sales / SELLER_STATIC_SALES_GRAPH_MAX) * 100));
-
-          return (
-            <div className="static-sales-column" key={point.label}>
-              <strong>{formatMoney(point.sales)}</strong>
-              <span
-                className="static-sales-bar"
-                style={{
-                  '--sales-bar-height': `${height}%`,
-                  '--sales-bar-color': point.color,
-                }}
-              />
-              <small>{point.label}</small>
+  const renderSellerAnalyticsPanel = (options = {}) => (
+    <section
+      className={options.embedded ? 'seller-analytics-board' : 'panel seller-analytics-board'}
+      aria-labelledby="seller-sales-graph-title"
+    >
+      <div className="seller-analytics-grid">
+        <div className="seller-sales-graph">
+          <div className="panel-title-row seller-sales-graph-header">
+            <div>
+              <h2 id="seller-sales-graph-title">Sales Graph</h2>
+              <p>Completed Sales</p>
             </div>
-          );
-        })}
+            {renderSellerDateFilter('', { plain: true, compact: true, controlsOnly: true })}
+          </div>
+
+          {renderSellerSalesTrendChart()}
+        </div>
+
+        <div className="seller-analytics-side">
+          <div className="seller-analytics-tabs" role="tablist" aria-label="Seller analytics">
+            <button
+              className={sellerAnalyticsTab === 'topProducts' ? 'active' : ''}
+              type="button"
+              role="tab"
+              aria-selected={sellerAnalyticsTab === 'topProducts'}
+              onClick={() => setSellerAnalyticsTab('topProducts')}
+            >
+              Top 5 Best Sell
+            </button>
+
+            <button
+              className={sellerAnalyticsTab === 'categorySales' ? 'active' : ''}
+              type="button"
+              role="tab"
+              aria-selected={sellerAnalyticsTab === 'categorySales'}
+              onClick={() => setSellerAnalyticsTab('categorySales')}
+            >
+              Category Sales
+            </button>
+          </div>
+
+          <div className="seller-analytics-block">
+            <div className="panel-title-row">
+              <div>
+                <h2>{sellerAnalyticsTab === 'topProducts' ? 'Top 5 Best Sell' : 'Category Sales'}</h2>
+                <p>
+                  {sellerAnalyticsTab === 'topProducts'
+                    ? 'Your highest-selling listings by completed orders.'
+                    : 'Revenue grouped by digital product category.'}
+                </p>
+              </div>
+              {sellerAnalyticsTab === 'topProducts' ? <BarChart3 size={20} /> : <Layers size={20} />}
+            </div>
+
+            {sellerAnalyticsTab === 'topProducts'
+              ? renderHorizontalChart(sellerTopProducts, 'sales', 'title', formatMoney)
+              : renderHorizontalChart(sellerSalesByCategory, 'sales', 'category', formatMoney)}
+          </div>
+        </div>
       </div>
     </section>
   );
 
-  const renderSellerRecentOrdersTable = () => {
+  const renderSellerRecentOrdersTable = (options = {}) => {
     const recentOrders = dateFilteredRoleOrders.slice(0, 5);
+    const className = options.panel
+      ? 'panel seller-recent-orders'
+      : 'seller-dashboard-section seller-recent-orders';
 
     return (
-      <section className="seller-dashboard-section seller-recent-orders">
-        <h2>Recent Orders</h2>
+      <section className={className}>
+        <div className="seller-recent-orders-header">
+          <h2>Recent Orders</h2>
+          {options.withDateFilter && renderSellerDateFilter('', {
+            plain: true,
+            compact: true,
+            controlsOnly: true,
+          })}
+        </div>
 
         <div className="table-wrap">
           <table className="data-table seller-recent-orders-table">
@@ -925,6 +1222,36 @@ export default function Dashboard({ user, userSessionName }) {
       </section>
     );
   };
+
+  const renderSellerDashboardTabs = () => (
+    <section className="panel seller-dashboard-tab-shell">
+      <div className="seller-dashboard-tabs" role="tablist" aria-label="Seller dashboard views">
+        <button
+          className={sellerDashboardTab === 'salesGraph' ? 'active' : ''}
+          type="button"
+          role="tab"
+          aria-selected={sellerDashboardTab === 'salesGraph'}
+          onClick={() => setSellerDashboardTab('salesGraph')}
+        >
+          Sales Graph
+        </button>
+
+        <button
+          className={sellerDashboardTab === 'recentOrders' ? 'active' : ''}
+          type="button"
+          role="tab"
+          aria-selected={sellerDashboardTab === 'recentOrders'}
+          onClick={() => setSellerDashboardTab('recentOrders')}
+        >
+          Recent Orders
+        </button>
+      </div>
+
+      {sellerDashboardTab === 'salesGraph'
+        ? renderSellerAnalyticsPanel({ embedded: true })
+        : renderSellerRecentOrdersTable({ withDateFilter: true })}
+    </section>
+  );
 
   const handleExportReportsPdf = () => {
     const topProducts = (isSeller ? sellerTopProducts : reports?.topProducts || []).slice(0, 5);
@@ -1215,13 +1542,13 @@ export default function Dashboard({ user, userSessionName }) {
       || normalized.includes('approved')
       || normalized.includes('ready')
       ? 'good'
-      : normalized.includes('pending') || normalized.includes('open') || normalized.includes('review')
+      : normalized.includes('pending') || normalized.includes('open') || normalized.includes('review') || normalized.includes('payout')
         ? 'warn'
         : normalized.includes('closed') || normalized.includes('failed') || normalized.includes('missing')
           ? 'bad'
           : '';
 
-    return <span className={`status-pill ${tone}`}>{status}</span>;
+    return <span className={`status-text ${tone}`}>{status}</span>;
   };
 
   const renderTextStatus = (status) => {
@@ -1244,7 +1571,7 @@ export default function Dashboard({ user, userSessionName }) {
   const renderOverview = () => (
     <div className="module-stack">
       <div
-        className={`grid-4 ${isAdmin ? 'admin-overview-metrics admin-metric-row' : ''} ${
+        className={`${isSeller || isCustomer ? 'grid-3' : 'grid-4'} ${isAdmin ? 'admin-overview-metrics admin-metric-row' : ''} ${
           isSeller ? 'seller-overview-metrics' : ''
         } ${isCustomer ? 'customer-overview-metrics' : ''}`}
       >
@@ -1264,15 +1591,15 @@ export default function Dashboard({ user, userSessionName }) {
           <CreditCard className="right-side-icon" size={22} />
         </div>
 
-        <div className="panel metric">
-          <div>
-            <span>{isCustomer ? 'Available Assets' : isSeller ? 'Listing' : 'Active Products'}</span>
-            <strong className="number-value">
-              {isSeller ? roleProducts.length : reports?.activeProducts || products.length}
-            </strong>
+        {isAdmin && (
+          <div className="panel metric">
+            <div>
+              <span>Active Products</span>
+              <strong className="number-value">{reports?.activeProducts || products.length}</strong>
+            </div>
+            <Package className="right-side-icon" size={22} />
           </div>
-          <Package className="right-side-icon" size={22} />
-        </div>
+        )}
 
         <div className="panel metric orders">
           <div>
@@ -1299,57 +1626,11 @@ export default function Dashboard({ user, userSessionName }) {
 
       {isSeller && (
         <>
-          {renderSellerDateFilter('Dashboard Date Filter', { plain: true })}
-
-          <div className="seller-dashboard-main-grid">
-            {renderStaticSalesGraph()}
-
-            <section className="panel chart-panel seller-tabbed-analytics">
-              <div className="seller-analytics-tabs" role="tablist" aria-label="Seller analytics">
-                <button
-                  className={sellerAnalyticsTab === 'topProducts' ? 'active' : ''}
-                  type="button"
-                  role="tab"
-                  aria-selected={sellerAnalyticsTab === 'topProducts'}
-                  onClick={() => setSellerAnalyticsTab('topProducts')}
-                >
-                  Top 5 Best Sell
-                </button>
-
-                <button
-                  className={sellerAnalyticsTab === 'categorySales' ? 'active' : ''}
-                  type="button"
-                  role="tab"
-                  aria-selected={sellerAnalyticsTab === 'categorySales'}
-                  onClick={() => setSellerAnalyticsTab('categorySales')}
-                >
-                  Category Sales
-                </button>
-              </div>
-
-              <div className="panel-title-row">
-                <div>
-                  <h2>{sellerAnalyticsTab === 'topProducts' ? 'Top 5 Best Sell' : 'Category Sales'}</h2>
-                  <p>
-                    {sellerAnalyticsTab === 'topProducts'
-                      ? 'Your highest-selling listings by completed orders.'
-                      : 'Revenue grouped by digital product category.'}
-                  </p>
-                </div>
-                {sellerAnalyticsTab === 'topProducts' ? <BarChart3 size={20} /> : <Layers size={20} />}
-              </div>
-
-              {sellerAnalyticsTab === 'topProducts'
-                ? renderHorizontalChart(sellerTopProducts, 'sales', 'title', formatMoney)
-                : renderHorizontalChart(sellerSalesByCategory, 'sales', 'category', formatMoney)}
-            </section>
-          </div>
+          {renderSellerDashboardTabs()}
         </>
       )}
 
-      {isSeller ? (
-        renderSellerRecentOrdersTable()
-      ) : (
+      {!isSeller && (
         <div className="grid-2">
         <div className="panel">
           <h2>{isCustomer ? 'Recent Purchases' : 'Recent Orders'}</h2>
@@ -1447,21 +1728,29 @@ export default function Dashboard({ user, userSessionName }) {
       </div>
 
       <div className="discover-product-grid">
-        {paginatedMarketplaceProducts.map((product, index) => (
+        {paginatedMarketplaceProducts.map((product, index) => {
+          const productImageSource = getProductImageSource(product);
+
+          return (
           <article
             className="discover-product-card"
             key={product.productId}
             style={{ '--discover-accent': getMarketplaceAccent(marketplacePageStart + index) }}
           >
-            <div className="discover-product-art">
+            <div className={`discover-product-art ${productImageSource ? 'has-image' : ''}`}>
+              {productImageSource ? (
+                <img src={productImageSource} alt={`${product.title} thumbnail`} />
+              ) : (
+                <div className="discover-product-placeholder">
+                  <Package size={42} />
+                </div>
+              )}
               <span>{getProductCategory(product)}</span>
-              <strong>{getProductInitials(product)}</strong>
             </div>
 
             <div className="discover-product-body">
               <div className="discover-product-meta">
                 <span>Creator #{product.sellerId || 'CoreK'}</span>
-                {renderStatus(product.isActive ? 'Ready' : 'Inactive')}
               </div>
 
               <h3>{product.title}</h3>
@@ -1475,21 +1764,22 @@ export default function Dashboard({ user, userSessionName }) {
               <div className="discover-product-footer">
                 <strong className="money-value">{formatMoney(product.price)}</strong>
 
-                <button
-                  className="discover-buy-button"
-                  type="button"
-                  onClick={() => {
-                    setCheckoutForm({ ...checkoutForm, productId: String(product.productId) });
-                    setActiveModule('payments');
-                  }}
-                >
-                  Buy
-                  <ShoppingBag size={15} />
-                </button>
+                <div className="discover-product-actions">
+                  <button
+                    className="discover-view-button"
+                    type="button"
+                    aria-label={`View ${product.title}`}
+                    title="View"
+                    onClick={() => openProductViewModal(product)}
+                  >
+                    <Eye size={16} />
+                  </button>
+                </div>
               </div>
             </div>
           </article>
-        ))}
+          );
+        })}
       </div>
 
       {marketplaceProducts.length > 0 && (
@@ -1540,7 +1830,7 @@ export default function Dashboard({ user, userSessionName }) {
       size="wide"
     >
       {productModalMode === 'details' ? (
-        <form onSubmit={handleProductSubmit}>
+        <form className="product-listing-form" onSubmit={handleProductSubmit}>
           <div className="form-grid">
             <div className="field">
               <label>Title</label>
@@ -1580,18 +1870,32 @@ export default function Dashboard({ user, userSessionName }) {
                     type="file"
                     accept="image/*"
                     disabled={Boolean(productForm.productId)}
+                    onClick={(e) => {
+                      e.currentTarget.value = '';
+                    }}
                     onChange={(e) => setProductForm({ ...productForm, coverPhotoFile: e.target.files?.[0] || null })}
                   />
                 </label>
               </div>
               {productForm.coverPhotoFile && (
-                <div className="upload-preview">
-                  {productImagePreviewUrl ? (
-                    <img src={productImagePreviewUrl} alt="Selected product image preview" />
-                  ) : (
-                    <div className="upload-preview-file">{productForm.coverPhotoFile.name}</div>
-                  )}
-                  <span>{productForm.coverPhotoFile.name}</span>
+                <div className="upload-preview product-image-preview">
+                  <div className="upload-preview-frame">
+                    {productImagePreviewUrl ? (
+                      <img src={productImagePreviewUrl} alt="Selected product image preview" />
+                    ) : (
+                      <div className="upload-preview-file">{productForm.coverPhotoFile.name}</div>
+                    )}
+                    <span className="upload-preview-label">Image</span>
+                    <button
+                      className="upload-preview-remove"
+                      type="button"
+                      aria-label="Remove selected image"
+                      onClick={() => setProductForm({ ...productForm, coverPhotoFile: null })}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                  <span className="upload-preview-name">{productForm.coverPhotoFile.name}</span>
                 </div>
               )}
               {productForm.productId && (
@@ -1711,43 +2015,74 @@ export default function Dashboard({ user, userSessionName }) {
     if (!activeProductView) return null;
 
     const productStatus = getProductApprovalStatus(activeProductView);
+    const productImageSource = getProductImageSource(activeProductView);
+    const sellerDetails = getProductSellerDetails(activeProductView);
+    const productViewTitle = isCustomer ? 'Product Details' : 'View Product';
 
     return (
-      <DashboardModal title="View Product" onClose={() => setActiveProductView(null)}>
+      <DashboardModal title={productViewTitle} onClose={() => setActiveProductView(null)} size={isCustomer ? 'product-details' : 'wide'}>
         <div className="product-view-stack">
-          <div className="mini-row">
-            <div>
-              <strong>Title</strong>
-              <span>{activeProductView.title}</span>
+          <div className="product-view-layout">
+            <div className="product-view-thumbnail">
+              {productImageSource ? (
+                <img src={productImageSource} alt={`${activeProductView.title} thumbnail`} />
+              ) : (
+                <div className="product-view-thumbnail-fallback">
+                  <Package size={46} />
+                </div>
+              )}
             </div>
-            {renderTextStatus(productStatus)}
+
+            <div className="product-view-details">
+              <div className="product-view-row">
+                <span>Title</span>
+                <strong>{activeProductView.title}</strong>
+              </div>
+
+              <div className="product-view-row">
+                <span>Category</span>
+                <strong>{activeProductView.category || activeProductView.categoryName || 'Digital Product'}</strong>
+              </div>
+
+              <div className="product-view-row">
+                <span>Price</span>
+                <strong>{formatMoney(activeProductView.price)}</strong>
+              </div>
+
+              <div className="product-view-row">
+                <span>Version</span>
+                <strong>{activeProductView.latestVersion || '1.0.0'}</strong>
+              </div>
+
+              {isCustomer ? (
+                <>
+                  <div className="product-view-row">
+                    <span>Contact No.</span>
+                    <strong>{sellerDetails.contactNo}</strong>
+                  </div>
+
+                  <div className="product-view-row">
+                    <span>Profile Name</span>
+                    <strong>{sellerDetails.profileName}</strong>
+                  </div>
+                </>
+              ) : (
+                <div className="product-view-row">
+                  <span>Status</span>
+                  {renderTextStatus(productStatus)}
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="mini-row">
-            <div>
-              <strong>Category</strong>
-              <span>{activeProductView.category || activeProductView.categoryName || 'Digital Product'}</span>
-            </div>
-            <strong className="money-value">{formatMoney(activeProductView.price)}</strong>
-          </div>
-
-          <div className="mini-row">
-            <div>
-              <strong>Version</strong>
-              <span>
-                {activeProductView.latestVersion || '1.0.0'} / {activeProductView.versionCount || 0} files
-              </span>
-            </div>
-          </div>
-
-          <div className="ticket-message-box">
+          <div className="product-view-description">
             <strong>Description</strong>
-            <p>{activeProductView.description}</p>
+            <p>{activeProductView.description || 'No description provided.'}</p>
           </div>
         </div>
 
         <div className="toolbar modal-actions">
-          <button className="button" type="button" onClick={() => setActiveProductView(null)}>
+          <button className={isCustomer ? 'button secondary' : 'button'} type="button" onClick={() => setActiveProductView(null)}>
             OK
           </button>
         </div>
@@ -1758,7 +2093,7 @@ export default function Dashboard({ user, userSessionName }) {
   const renderNotificationModal = () => (
     <DashboardModal title={notificationModalMessage} onClose={() => setNotificationModalMessage('')}>
       <div className="request-notification">
-        <ShieldCheck size={30} />
+        <CheckCircle size={30} />
         <strong>{notificationModalMessage}</strong>
         <p>Your request is now shown in the Product Listings table for admin validation.</p>
       </div>
@@ -1799,12 +2134,11 @@ export default function Dashboard({ user, userSessionName }) {
           </div>
         )}
 
-        <div className="panel">
-          <div className="module-header">
+        <div className="panel product-listings-panel">
+          <div className="product-listings-header">
             <h2>Product Listings</h2>
             <input
               className="search-input"
-              style={{ maxWidth: 320 }}
               placeholder="Search products"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -1888,7 +2222,7 @@ export default function Dashboard({ user, userSessionName }) {
                           type="button"
                           aria-label={`View ${product.title}`}
                           title="View"
-                          onClick={() => setActiveProductView(product)}
+                          onClick={() => openProductViewModal(product)}
                         >
                           <Eye size={14} />
                         </button>
@@ -1988,49 +2322,40 @@ export default function Dashboard({ user, userSessionName }) {
 
   const renderLibraryFilterModal = () => (
     <DashboardModal
-      title="Filter Library"
-      subtitle="Narrow purchased downloads by delivery status and category."
+      title="Date Filter"
+      subtitle="Narrow purchase records by checkout date."
       onClose={() => setIsLibraryFilterOpen(false)}
     >
-      <div className="form-grid">
+      <div className="form-grid library-filter-form">
         <div className="field">
-          <label>Status</label>
-          <select
-            value={libraryFilters.status}
-            onChange={(e) => setLibraryFilters({ ...libraryFilters, status: e.target.value })}
-          >
-            <option value="all">All statuses</option>
-            <option value="Completed">Completed</option>
-            <option value="Pending">Pending</option>
-            <option value="Failed">Failed</option>
-          </select>
+          <label>Start</label>
+          <input
+            type="date"
+            value={libraryFilters.start}
+            onChange={(e) => setLibraryFilters({ ...libraryFilters, start: e.target.value })}
+          />
         </div>
 
         <div className="field">
-          <label>Category</label>
-          <select
-            value={libraryFilters.category}
-            onChange={(e) => setLibraryFilters({ ...libraryFilters, category: e.target.value })}
-          >
-            {libraryCategoryOptions.map((category) => (
-              <option key={category.value} value={category.value}>
-                {category.label}
-              </option>
-            ))}
-          </select>
+          <label>End</label>
+          <input
+            type="date"
+            value={libraryFilters.end}
+            onChange={(e) => setLibraryFilters({ ...libraryFilters, end: e.target.value })}
+          />
         </div>
       </div>
 
       <div className="toolbar modal-actions">
         <button className="button" type="button" onClick={() => setIsLibraryFilterOpen(false)}>
-          Apply Filters
-          <SlidersHorizontal size={16} />
+          Apply Date
+          <CalendarDays size={16} />
         </button>
 
         <button
           className="button secondary"
           type="button"
-          onClick={() => setLibraryFilters({ status: 'all', category: 'all' })}
+          onClick={() => setLibraryFilters({ start: '', end: '' })}
         >
           Reset
         </button>
@@ -2040,12 +2365,19 @@ export default function Dashboard({ user, userSessionName }) {
 
   const renderPayments = () => {
     const paymentRows = isSeller ? dateFilteredRoleOrders : filteredLibraryOrders;
+    const payoutQrSeed = [
+      profile.payoutMethod || 'GCash',
+      profile.payoutAccountName || displayName,
+      profile.payoutAccountNumber || 'No account number',
+    ].join('|');
+    const payoutQrCells = getPayoutQrCells(payoutQrSeed);
 
     return (
     <div className="module-stack">
+      {!isCustomer && (
       <div className={isAdmin ? 'module-stack' : 'grid-2'}>
         {!isAdmin && isCustomer && (
-          <form className="panel" onSubmit={handleCheckout}>
+          <form className="panel customer-checkout-form" onSubmit={handleCheckout}>
             <h2>Checkout</h2>
 
             <div className="form-grid">
@@ -2103,37 +2435,59 @@ export default function Dashboard({ user, userSessionName }) {
               <p>Request payout after completed sales are filtered and reviewed.</p>
             </div>
 
-            <div className="mini-list payout-summary-list">
-              <div className="mini-row">
-                <div>
-                  <strong>Available Payout</strong>
-                  <span>{formatDateRange(sellerDateFilters)}</span>
-                </div>
-                <strong className="money-value">{formatMoney(sellerRevenue)}</strong>
-              </div>
-
-              <div className="mini-row">
-                <div>
-                  <strong>Destination</strong>
-                  <span>
-                    {profile.payoutMethod || 'GCash'} - {profile.payoutAccountName || 'No account name'}
-                  </span>
-                </div>
-                {renderStatus(profile.payoutAccountNumber ? 'Ready' : 'Missing')}
-              </div>
-
-              {payoutRequest && (
-                <div className="mini-row">
+            <div className="payout-process-content">
+              <div className="mini-list payout-summary-list">
+                <div className="mini-row payout-summary-row">
                   <div>
-                    <strong>Latest Request</strong>
-                    <span>{formatDate(payoutRequest.requestedAt)}</span>
+                    <strong>Available Payout</strong>
+                    <span>{formatDateRange(sellerDateFilters)}</span>
                   </div>
-                  {renderStatus(payoutRequest.status)}
+                  <strong className="money-value">{formatMoney(sellerRevenue)}</strong>
                 </div>
-              )}
+
+                <div className="mini-row payout-summary-row">
+                  <div>
+                    <strong>Destination</strong>
+                    <span>
+                      {profile.payoutMethod || 'GCash'} - {profile.payoutAccountName || 'No account name'}
+                      {profile.payoutAccountNumber ? ` (${profile.payoutAccountNumber})` : ''}
+                    </span>
+                  </div>
+                  {renderStatus(profile.payoutAccountNumber ? 'Ready' : 'Missing')}
+                </div>
+
+                {payoutRequest && (
+                  <div className="mini-row payout-summary-row">
+                    <div>
+                      <strong>Latest Request</strong>
+                      <span>{formatDate(payoutRequest.requestedAt)}</span>
+                    </div>
+                    {renderStatus(payoutRequest.status)}
+                  </div>
+                )}
+              </div>
+
+              <div className="payout-qr-card">
+                <div className="payout-qr-grid" aria-hidden="true">
+                  {payoutQrCells.map((isFilled, index) => (
+                    <span className={isFilled ? 'filled' : ''} key={`${payoutQrSeed}-${index}`} />
+                  ))}
+                </div>
+                <div>
+                  <strong>Payout QR</strong>
+                  <span>{profile.payoutMethod || 'GCash'}</span>
+                  <small>{profile.payoutAccountNumber || 'Add account number'}</small>
+                </div>
+              </div>
             </div>
 
-            <button className="button" type="button" onClick={handleRequestPayout}>
+            <button
+              className="button"
+              type="button"
+              onClick={handleRequestPayout}
+              disabled={!profile.payoutAccountNumber || sellerRevenue <= 0}
+              title={!profile.payoutAccountNumber ? 'Add payout account number in Profile first.' : undefined}
+            >
               Request Payout
               <CreditCard size={16} />
             </button>
@@ -2143,7 +2497,7 @@ export default function Dashboard({ user, userSessionName }) {
         <div className="panel">
           <div className="panel-title-row">
             <div>
-              <h2>{isCustomer ? 'My Digital Library' : isSeller ? 'Recent Buyer Access' : 'Digital Delivery'}</h2>
+              {!isCustomer && <h2>{isSeller ? 'Recent Buyer Access' : 'Digital Delivery'}</h2>}
               {isCustomer && <p>{filteredLibraryOrders.length} records in the current view.</p>}
             </div>
 
@@ -2172,24 +2526,22 @@ export default function Dashboard({ user, userSessionName }) {
           </div>
         </div>
       </div>
+      )}
 
       <div className="panel">
-        <div className="panel-title-row">
+        <div className="panel-title-row payout-records-header">
           <div>
             <h2>{isCustomer ? 'Purchase Records' : isSeller ? 'Payout Records' : 'Payment Records'}</h2>
-            {isCustomer && (
-              <p>
-                Status: {libraryFilters.status === 'all' ? 'All' : libraryFilters.status} | Category:{' '}
-                {libraryFilters.category === 'all' ? 'All' : libraryFilters.category}
-              </p>
-            )}
+            {isCustomer && <p>Date range: {formatDateRange(libraryFilters)}</p>}
             {isSeller && <p>Date range: {formatDateRange(sellerDateFilters)}</p>}
           </div>
 
+          {isSeller && renderSellerDateFilter('', { plain: true, compact: true, controlsOnly: true })}
+
           {isCustomer && (
             <button className="button secondary" type="button" onClick={() => setIsLibraryFilterOpen(true)}>
-              Filter Library
-              <SlidersHorizontal size={16} />
+              Date Filter
+              <CalendarDays size={16} />
             </button>
           )}
         </div>
@@ -2198,34 +2550,36 @@ export default function Dashboard({ user, userSessionName }) {
           <table className="data-table">
             <thead>
               <tr>
-                <th className="number-cell">Reference</th>
-                <th>Customer</th>
+                <th>Reference No.</th>
+                <th>{isCustomer ? 'Seller' : 'Customer'}</th>
                 <th>Product</th>
                 <th className="money-cell">Total</th>
-                <th>Status</th>
-                <th className="number-cell">{isSeller ? 'Payout Status' : 'Download Token'}</th>
+                <th className="center-cell">Status</th>
+                {!isCustomer && <th className="number-cell">{isSeller ? 'Payout Status' : 'Download Token'}</th>}
               </tr>
             </thead>
 
             <tbody>
               {paymentRows.map((order) => (
                 <tr key={order.orderId}>
-                  <td className="number-cell">{order.referenceNumber}</td>
-                  <td>{order.customerName}</td>
+                  <td>{order.referenceNumber}</td>
+                  <td>{isCustomer ? getOrderSellerName(order) : order.customerName}</td>
                   <td>{order.productTitle}</td>
                   <td className="money-cell">{formatMoney(order.totalAmount)}</td>
-                  <td>{isAdmin || isCustomer ? renderTextStatus(order.status) : renderStatus(order.status)}</td>
-                  <td className="number-cell">
-                    {isSeller
-                      ? renderStatus(order.status === 'Completed' ? 'Ready for Payout' : 'Pending')
-                      : order.downloadToken || 'Pending'}
-                  </td>
+                  <td className="center-cell">{isAdmin || isCustomer ? renderTextStatus(order.status) : renderStatus(order.status)}</td>
+                  {!isCustomer && (
+                    <td className="number-cell">
+                      {isSeller
+                        ? renderStatus(order.status === 'Completed' ? 'For Payout' : 'Pending')
+                        : order.downloadToken || 'Pending'}
+                    </td>
+                  )}
                 </tr>
               ))}
 
               {paymentRows.length === 0 && (
                 <tr>
-                  <td colSpan="6">
+                  <td colSpan={isCustomer ? 5 : 6}>
                     <div className="empty-state">No payment records match this view.</div>
                   </td>
                 </tr>
@@ -2263,7 +2617,9 @@ export default function Dashboard({ user, userSessionName }) {
             </button>
           </div>
 
-          {renderSellerDateFilter('Reports Date Filter', { plain: true })}
+          <div className="seller-reports-filter-row">
+            {renderSellerDateFilter('', { plain: true, compact: true, controlsOnly: true })}
+          </div>
 
           <div className="grid-3 seller-report-metrics">
             <div className="panel metric revenue">
@@ -2594,7 +2950,10 @@ export default function Dashboard({ user, userSessionName }) {
     }
 
     return (
-      <form className="panel" onSubmit={handleProfileSubmit}>
+      <form
+        className={`panel ${isSeller ? 'seller-profile-form' : ''} ${isCustomer ? 'customer-profile-form' : ''}`}
+        onSubmit={handleProfileSubmit}
+      >
         <h2>Profile and Payout Details</h2>
 
         <div className="form-grid">
@@ -3089,17 +3448,17 @@ export default function Dashboard({ user, userSessionName }) {
       support: ['Helpdesk Monitor', 'View product and order-related support tickets across the marketplace.'],
     },
     Seller: {
-      overview: ['Creator Overview', 'Track listings, buyer access, revenue, and open support issues for your store.'],
-      products: ['Creator Listings', 'Upload products, set prices, and push version updates to buyers.'],
+      overview: [`Hello! ${displayName}`, ''],
+      products: ['', ''],
       payments: ['Payout Activity', 'Monitor buyer orders, delivery access, and checkout references.'],
-      reports: ['Creator Analytics', 'See what sells, what needs updates, and where support needs attention.'],
+      reports: ['', ''],
       profile: ['Seller Profile', 'Maintain storefront details and payout account settings.'],
       support: ['Buyer Support', 'Respond to product and order issues connected to your listings.'],
     },
     Customer: {
-      overview: ['Customer Home', 'Browse the marketplace, see your purchases, and keep support close.'],
+      overview: [`Hi, ${firstName}`, 'Browse the marketplace, see your purchases, and keep support close.'],
       products: ['Marketplace', 'Discover digital products, review versions, and choose what to buy.'],
-      payments: ['My Library', 'Checkout securely and access purchase references and download tokens.'],
+      payments: ['My Library', 'View purchase references and delivery records.'],
       profile: ['Customer Profile', 'Maintain your buyer information and account protection settings.'],
       support: ['Support Tickets', 'Ask for help on orders, downloads, product files, or account concerns.'],
     },
@@ -3132,7 +3491,8 @@ export default function Dashboard({ user, userSessionName }) {
   };
 
   return (
-    <div className={`dashboard-shell ${roleConfig.className}`}>
+    <div className={`dashboard-shell ${roleConfig.className} module-${activeRoleModule}`}>
+      {!isCustomer && (
       <aside className="dashboard-sidebar">
         <div className="dashboard-user">
           <strong>{displayName}</strong>
@@ -3165,22 +3525,25 @@ export default function Dashboard({ user, userSessionName }) {
           })}
         </nav>
       </aside>
+      )}
 
       <main className="dashboard-content">
-        <div
-          className={`module-header ${
-            (isAdmin && adminPlainHeaderModules.includes(activeRoleModule))
-              || (isSeller && sellerPlainHeaderModules.includes(activeRoleModule))
-              || (isCustomer && customerPlainHeaderModules.includes(activeRoleModule))
-              ? 'seller-dashboard-heading'
-              : ''
-          }`}
-        >
-          <div>
-            <h1>{activeCopy[0]}</h1>
-            <p>{activeCopy[1]}</p>
+        {(activeCopy[0] || activeCopy[1]) && (
+          <div
+            className={`module-header ${
+              (isAdmin && adminPlainHeaderModules.includes(activeRoleModule))
+                || (isSeller && sellerPlainHeaderModules.includes(activeRoleModule))
+                || (isCustomer && customerPlainHeaderModules.includes(activeRoleModule))
+                ? 'seller-dashboard-heading'
+                : ''
+            }`}
+          >
+            <div>
+              {activeCopy[0] && <h1>{activeCopy[0]}</h1>}
+              {activeCopy[1] && <p>{activeCopy[1]}</p>}
+            </div>
           </div>
-        </div>
+        )}
 
         {notice && <div className="notice">{notice}</div>}
         {error && <div className="notice error">{error}</div>}

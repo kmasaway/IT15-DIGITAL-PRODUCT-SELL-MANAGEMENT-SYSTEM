@@ -64,6 +64,7 @@ export const api = {
   }),
 
   getProducts: (search = '') => request(`/Product${search ? `?search=${encodeURIComponent(search)}` : ''}`),
+  getProduct: (productId) => request(`/Product/${productId}`),
   getSellerProducts: (sellerId) => request(`/Product/seller/${sellerId}`),
   uploadProduct: (formData) => request('/Product/upload', { method: 'POST', body: formData }),
   updateProduct: (productId, payload) => request(`/Product/${productId}`, {

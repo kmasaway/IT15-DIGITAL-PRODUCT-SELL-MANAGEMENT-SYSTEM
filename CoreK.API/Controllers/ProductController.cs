@@ -58,6 +58,18 @@ namespace CoreK.API.Controllers
                     p.Price,
                     p.IsActive,
                     p.CreatedAt,
+                    SellerName = _context.Users
+                        .Where(u => u.UserId == p.SellerId)
+                        .Select(u => u.FullName)
+                        .FirstOrDefault(),
+                    SellerPhoneNumber = _context.Users
+                        .Where(u => u.UserId == p.SellerId)
+                        .Select(u => u.PhoneNumber)
+                        .FirstOrDefault(),
+                    SellerProfileName = _context.Users
+                        .Where(u => u.UserId == p.SellerId)
+                        .Select(u => u.FullName)
+                        .FirstOrDefault(),
                     Category = p.Category == null ? "Digital Product" : p.Category.CategoryName,
                     CategoryName = p.Category == null ? "Digital Product" : p.Category.CategoryName,
                     VersionCount = p.Versions.Count,
@@ -65,6 +77,10 @@ namespace CoreK.API.Controllers
                         .OrderByDescending(v => v.ReleaseDate)
                         .Select(v => v.VersionNumber)
                         .FirstOrDefault() ?? "1.0.0",
+                    CoverFilePath = p.Versions
+                        .OrderBy(v => v.ReleaseDate)
+                        .Select(v => v.SecureFilePath)
+                        .FirstOrDefault(),
                     Versions = p.Versions
                         .OrderByDescending(v => v.ReleaseDate)
                         .Select(v => new
@@ -77,7 +93,27 @@ namespace CoreK.API.Controllers
                 })
                 .ToListAsync();
 
-            return Ok(products);
+            return Ok(products.Select(p => new
+            {
+                p.ProductId,
+                p.SellerId,
+                p.CategoryId,
+                p.Title,
+                p.Description,
+                p.Price,
+                p.IsActive,
+                p.CreatedAt,
+                p.SellerName,
+                p.SellerPhoneNumber,
+                p.SellerProfileName,
+                p.Category,
+                p.CategoryName,
+                p.VersionCount,
+                p.LatestVersion,
+                ThumbnailUrl = GetPublicAssetUrl(p.CoverFilePath),
+                CoverPhotoUrl = GetPublicAssetUrl(p.CoverFilePath),
+                p.Versions
+            }));
         }
 
         [HttpGet("{productId}")]
@@ -95,10 +131,23 @@ namespace CoreK.API.Controllers
                 return NotFound("Product listing not found.");
             }
 
+            var sellerProfile = await _context.Users
+                .AsNoTracking()
+                .Where(u => u.UserId == product.SellerId)
+                .Select(u => new
+                {
+                    u.FullName,
+                    u.PhoneNumber
+                })
+                .FirstOrDefaultAsync();
+
             return Ok(new
             {
                 product.ProductId,
                 product.SellerId,
+                SellerName = sellerProfile?.FullName,
+                SellerPhoneNumber = sellerProfile?.PhoneNumber,
+                SellerProfileName = sellerProfile?.FullName,
                 product.CategoryId,
                 product.Title,
                 product.Description,
@@ -107,6 +156,14 @@ namespace CoreK.API.Controllers
                 product.CreatedAt,
                 Category = product.Category?.CategoryName ?? "Digital Product",
                 CategoryName = product.Category?.CategoryName ?? "Digital Product",
+                ThumbnailUrl = GetPublicAssetUrl(product.Versions
+                    .OrderBy(v => v.ReleaseDate)
+                    .Select(v => v.SecureFilePath)
+                    .FirstOrDefault()),
+                CoverPhotoUrl = GetPublicAssetUrl(product.Versions
+                    .OrderBy(v => v.ReleaseDate)
+                    .Select(v => v.SecureFilePath)
+                    .FirstOrDefault()),
                 Versions = product.Versions
                     .OrderByDescending(v => v.ReleaseDate)
                     .Select(v => new
@@ -114,7 +171,8 @@ namespace CoreK.API.Controllers
                         v.VersionId,
                         v.VersionNumber,
                         v.Changelog,
-                        v.ReleaseDate
+                        v.ReleaseDate,
+                        FileUrl = GetPublicAssetUrl(v.SecureFilePath)
                     })
             });
         }
@@ -143,16 +201,50 @@ namespace CoreK.API.Controllers
                     p.Price,
                     p.IsActive,
                     p.CreatedAt,
+                    SellerName = _context.Users
+                        .Where(u => u.UserId == p.SellerId)
+                        .Select(u => u.FullName)
+                        .FirstOrDefault(),
+                    SellerPhoneNumber = _context.Users
+                        .Where(u => u.UserId == p.SellerId)
+                        .Select(u => u.PhoneNumber)
+                        .FirstOrDefault(),
+                    SellerProfileName = _context.Users
+                        .Where(u => u.UserId == p.SellerId)
+                        .Select(u => u.FullName)
+                        .FirstOrDefault(),
                     Category = p.Category == null ? "Digital Product" : p.Category.CategoryName,
                     VersionCount = p.Versions.Count,
                     LatestVersion = p.Versions
                         .OrderByDescending(v => v.ReleaseDate)
                         .Select(v => v.VersionNumber)
-                        .FirstOrDefault() ?? "1.0.0"
+                        .FirstOrDefault() ?? "1.0.0",
+                    CoverFilePath = p.Versions
+                        .OrderBy(v => v.ReleaseDate)
+                        .Select(v => v.SecureFilePath)
+                        .FirstOrDefault()
                 })
                 .ToListAsync();
 
-            return Ok(products);
+            return Ok(products.Select(p => new
+            {
+                p.ProductId,
+                p.SellerId,
+                p.CategoryId,
+                p.Title,
+                p.Description,
+                p.Price,
+                p.IsActive,
+                p.CreatedAt,
+                p.SellerName,
+                p.SellerPhoneNumber,
+                p.SellerProfileName,
+                p.Category,
+                p.VersionCount,
+                p.LatestVersion,
+                ThumbnailUrl = GetPublicAssetUrl(p.CoverFilePath),
+                CoverPhotoUrl = GetPublicAssetUrl(p.CoverFilePath)
+            }));
         }
 
         [HttpPost("upload")]
@@ -242,8 +334,13 @@ namespace CoreK.API.Controllers
                         product.CreatedAt,
                         Category = categoryName,
                         CategoryName = categoryName,
+                        SellerName = seller.FullName,
+                        SellerPhoneNumber = seller.PhoneNumber,
+                        SellerProfileName = seller.FullName,
                         VersionCount = 1,
-                        LatestVersion = "1.0.0"
+                        LatestVersion = "1.0.0",
+                        ThumbnailUrl = GetPublicAssetUrl(savedFilePath),
+                        CoverPhotoUrl = GetPublicAssetUrl(savedFilePath)
                     }
                 });
             }
@@ -349,6 +446,25 @@ namespace CoreK.API.Controllers
             }
 
             return filePath;
+        }
+
+        private static string? GetPublicAssetUrl(string? filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath))
+            {
+                return null;
+            }
+
+            if (Uri.TryCreate(filePath, UriKind.Absolute, out var uri)
+                && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+            {
+                return filePath;
+            }
+
+            var fileName = Path.GetFileName(filePath);
+            return string.IsNullOrWhiteSpace(fileName)
+                ? null
+                : $"/uploads/{Uri.EscapeDataString(fileName)}";
         }
     }
 }

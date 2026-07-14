@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Download, LayoutDashboard, LifeBuoy, Package, UserCog } from 'lucide-react';
 import LandingPage from './pages/LandingPage';
 import AuthModal from './components/AuthModal';
 import Dashboard from './pages/Dashboard';
+
+const CUSTOMER_NAV_ITEMS = [
+  { id: 'overview', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'products', label: 'Marketplace', icon: Package },
+  { id: 'payments', label: 'Library', icon: Download },
+  { id: 'support', label: 'Support', icon: LifeBuoy },
+  { id: 'profile', label: 'Profile', icon: UserCog },
+];
 
 export default function App() {
   const savedUser = useMemo(() => {
@@ -20,7 +29,10 @@ export default function App() {
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [sessionUser, setSessionUser] = useState(savedUser);
+  const [activeCustomerModule, setActiveCustomerModule] = useState('overview');
   const isAuthenticated = Boolean(sessionUser);
+  const sessionRole = sessionUser?.role || sessionUser?.Role || 'Customer';
+  const isCustomerSession = isAuthenticated && sessionRole === 'Customer';
 
   // Smoothly invokes modal initialization pipelines
   const handleOpenAuthModal = () => {
@@ -35,6 +47,7 @@ export default function App() {
   const handleLoginSuccess = (user) => {
     const nextUser = user || { userId: 1, fullName: 'CoreK User', role: 'Customer' };
     setSessionUser(nextUser);
+    setActiveCustomerModule('overview');
     localStorage.setItem('corek_user', JSON.stringify(nextUser));
     setIsAuthModalOpen(false);
   };
@@ -42,6 +55,7 @@ export default function App() {
   // Safely destroys state token context parameters for session logout
   const handleLogout = useCallback(() => {
     setSessionUser(null);
+    setActiveCustomerModule('overview');
     localStorage.removeItem('corek_user');
     localStorage.removeItem('sys_auth_token');
   }, []);
@@ -55,13 +69,38 @@ export default function App() {
   }, [handleLogout]);
 
   return (
-    <div style={styles.appContainer}>
+    <div style={{ ...styles.appContainer, ...(isAuthenticated ? styles.authenticatedAppContainer : {}) }}>
       {/* Dynamic Header / Navigation Bar */}
       <header style={styles.navbar}>
         <div style={styles.logoGroup}>
           <div style={styles.logoIcon}></div>
           <span style={styles.logoText}>CoreK</span>
         </div>
+        {isCustomerSession ? (
+          <nav className="customer-header-nav" style={styles.customerHeaderNav} aria-label="Customer navigation">
+            {CUSTOMER_NAV_ITEMS.map((item) => {
+              const Icon = item.icon;
+
+              return (
+                <button
+                  key={item.id}
+                  className={`customer-header-nav-button ${activeCustomerModule === item.id ? 'active' : ''}`}
+                  type="button"
+                  style={{
+                    ...styles.customerHeaderNavItem,
+                    ...(activeCustomerModule === item.id ? styles.customerHeaderNavItemActive : {})
+                  }}
+                  onClick={() => setActiveCustomerModule(item.id)}
+                >
+                  <Icon size={16} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        ) : (
+          <div style={styles.headerCenterSpacer} />
+        )}
         <nav style={styles.navLinks}>
           {!isAuthenticated ? (
             <button 
@@ -72,7 +111,6 @@ export default function App() {
             </button>
           ) : (
             <div style={styles.sessionGroup}>
-              <span style={styles.sessionText}>{sessionUser?.fullName || 'CoreK User'}</span>
               <button 
                 style={styles.navItemLinkPrimary} 
                 onClick={handleLogout}
@@ -85,11 +123,16 @@ export default function App() {
       </header>
 
       {/* Main UI View Pipelines */}
-      <div style={styles.viewWrapper}>
+      <div style={{ ...styles.viewWrapper, ...(isAuthenticated ? styles.authenticatedViewWrapper : {}) }}>
         {!isAuthenticated ? (
           <LandingPage onOpenAuthModal={handleOpenAuthModal} />
         ) : (
-          <Dashboard user={sessionUser} onLogout={handleLogout} />
+          <Dashboard
+            user={sessionUser}
+            onLogout={handleLogout}
+            activeModule={isCustomerSession ? activeCustomerModule : undefined}
+            onActiveModuleChange={isCustomerSession ? setActiveCustomerModule : undefined}
+          />
         )}
       </div>
 
@@ -106,18 +149,23 @@ export default function App() {
 const styles = {
   appContainer: {
     minHeight: '100vh',
-    backgroundColor: '#fbfdfc',
+    backgroundColor: '#f6f6f6',
     fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     display: 'flex',
     flexDirection: 'column'
   },
+  authenticatedAppContainer: {
+    height: '100vh',
+    overflow: 'hidden'
+  },
   navbar: {
-    display: 'flex',
-    justifyContent: 'space-between',
+    display: 'grid',
+    gridTemplateColumns: 'minmax(120px, 1fr) auto minmax(120px, 1fr)',
     alignItems: 'center',
-    padding: '1.25rem 2.5rem',
+    gap: '1rem',
+    padding: '1rem clamp(96px, 9vw, 168px)',
     borderBottom: '1px solid #e2efe9',
-    backgroundColor: 'rgba(251, 253, 252, 0.8)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     backdropFilter: 'blur(12px)',
     position: 'sticky',
     top: 0,
@@ -126,7 +174,8 @@ const styles = {
   logoGroup: {
     display: 'flex',
     alignItems: 'center',
-    gap: '10px'
+    gap: '10px',
+    justifySelf: 'start'
   },
   logoIcon: {
     width: '12px',
@@ -143,7 +192,52 @@ const styles = {
   navLinks: {
     display: 'flex',
     alignItems: 'center',
+    justifySelf: 'end',
     gap: '1.5rem'
+  },
+  headerCenterSpacer: {
+    minHeight: '42px'
+  },
+  customerHeaderNav: {
+    minWidth: 0,
+    maxWidth: 'min(680px, 52vw)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '0.35rem',
+    padding: '0.35rem',
+    border: '1px solid #e2efe9',
+    borderRadius: '14px',
+    backgroundColor: 'rgba(255,255,255,0.82)',
+    boxShadow: '0 8px 22px rgba(15,41,30,0.05)',
+    overflowX: 'auto',
+    scrollbarWidth: 'none'
+  },
+  customerHeaderNavItem: {
+    minHeight: '34px',
+    border: '1px solid transparent',
+    backgroundColor: 'transparent',
+    color: '#2d4a3e',
+    borderRadius: '10px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '0.4rem',
+    padding: '0.45rem 0.7rem',
+    fontSize: '0.84rem',
+    fontWeight: '750',
+    whiteSpace: 'nowrap',
+    cursor: 'pointer',
+    outline: 'none',
+    boxShadow: 'none',
+    appearance: 'none',
+    WebkitAppearance: 'none',
+    transition: 'background-color 160ms ease, color 160ms ease'
+  },
+  customerHeaderNavItemActive: {
+    borderColor: '#00bfa5',
+    backgroundColor: '#00bfa5',
+    color: '#ffffff'
   },
   sessionGroup: {
     display: 'flex',
@@ -180,5 +274,9 @@ const styles = {
     flex: 1,
     position: 'relative',
     width: '100%'
+  },
+  authenticatedViewWrapper: {
+    minHeight: 0,
+    overflow: 'hidden'
   }
 };

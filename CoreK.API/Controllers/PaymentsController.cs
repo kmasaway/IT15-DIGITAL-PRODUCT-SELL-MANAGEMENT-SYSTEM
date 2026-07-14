@@ -108,6 +108,25 @@ namespace CoreK.API.Controllers
                     o.CreatedAt,
                     ProductId = o.ProductId,
                     ProductTitle = o.Product == null ? "Deleted product" : o.Product.Title,
+                    SellerId = o.Product == null ? 0 : o.Product.SellerId,
+                    SellerName = o.Product == null
+                        ? "Seller User"
+                        : _context.Users
+                            .Where(u => u.UserId == o.Product.SellerId)
+                            .Select(u => u.FullName)
+                            .FirstOrDefault() ?? $"Seller #{o.Product.SellerId}",
+                    SellerPhoneNumber = o.Product == null
+                        ? null
+                        : _context.Users
+                            .Where(u => u.UserId == o.Product.SellerId)
+                            .Select(u => u.PhoneNumber)
+                            .FirstOrDefault(),
+                    SellerProfileName = o.Product == null
+                        ? "Seller User"
+                        : _context.Users
+                            .Where(u => u.UserId == o.Product.SellerId)
+                            .Select(u => u.FullName)
+                            .FirstOrDefault() ?? $"Seller #{o.Product.SellerId}",
                     Category = o.Product == null || o.Product.Category == null
                         ? "Digital Product"
                         : o.Product.Category.CategoryName

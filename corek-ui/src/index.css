@@ -5,7 +5,7 @@ html, body, #root {
   min-height: 100vh;
   overflow-x: hidden;
   box-sizing: border-box;
-  background-color: #f0f7f4;
+  background-color: #f6f6f6;
 }
 
 #root {
@@ -35,6 +35,43 @@ input:focus {
   background-color: #ffffff !important;
   border-color: #00bfa5 !important;
   box-shadow: 0 0 0 4px rgba(0, 191, 165, 0.12) !important;
+}
+
+.customer-header-nav {
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+
+.customer-header-nav-button,
+.customer-header-nav-button:focus,
+.customer-header-nav-button:focus-visible,
+.customer-header-nav-button:active {
+  border: 1px solid transparent !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  appearance: none;
+  -webkit-appearance: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.customer-header-nav-button:hover {
+  border-color: #00bfa5 !important;
+  background-color: #00bfa5 !important;
+  color: #ffffff !important;
+}
+
+.customer-header-nav-button.active,
+.customer-header-nav-button.active:hover,
+.customer-header-nav-button.active:focus,
+.customer-header-nav-button.active:focus-visible,
+.customer-header-nav-button.active:active {
+  border-color: #00bfa5 !important;
+  background-color: #00bfa5 !important;
+  color: #ffffff !important;
+}
+
+.customer-header-nav-button::-moz-focus-inner {
+  border: 0 !important;
 }
 
 @keyframes fadeInUp {
