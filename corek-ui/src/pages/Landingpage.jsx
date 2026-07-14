@@ -56,15 +56,13 @@ export default function LandingPage({ onOpenAuthModal }) {
       <div style={styles.heroGrid}>
         <div style={styles.heroLeft}>
           <h1 style={styles.heroText}>
-            Turn your code configs
-            <br />
-            into a <span style={styles.gradientText}>global storefront</span>.
+            Turn your digital creations into a <span style={styles.gradientText}>global storefront</span>.
           </h1>
 
           <p style={styles.subHero}>
-            Stop dealing with complex billing infrastructures. Upload scripts, financial models,
-            3D assets, design resources, courses, planners, art packs, or entertainment files and collect
-            secure automated payments instantly.
+            Sell scripts, templates, financial models, 3D assets, design resources, courses,
+            planners, art packs, and other digital products—all from one secure and easy-to-manage
+            platform.
           </p>
 
           <div style={styles.ctaGroup}>
@@ -462,6 +460,7 @@ const styles = {
     maxWidth: '640px',
     lineHeight: '1.6',
     margin: '0 0 2.5rem 0',
+    textAlign: 'justify',
   },
   ctaGroup: {
     display: 'flex',
