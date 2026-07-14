@@ -55,14 +55,6 @@ export default function LandingPage({ onOpenAuthModal }) {
       {/* --- HERO SECTION --- */}
       <div style={styles.heroGrid}>
         <div style={styles.heroLeft}>
-          <div style={styles.badge}>
-            <div style={styles.badgePulse}></div>
-            <Coins size={14} color="#00bfa5" />
-            <span>
-              Keep <strong>95%</strong> of your revenue split parameters
-            </span>
-          </div>
-
           <h1 style={styles.heroText}>
             Turn your code configs
             <br />
@@ -430,7 +422,7 @@ export default function LandingPage({ onOpenAuthModal }) {
 
 const styles = {
   main: {
-    padding: '4rem var(--app-page-x-padding) 8rem',
+    padding: '3rem var(--app-page-x-padding) 6rem',
     maxWidth: 'none',
     margin: '0 auto',
     width: '100%',
@@ -442,34 +434,13 @@ const styles = {
     gridTemplateColumns: '1.1fr 0.9fr',
     gap: '4rem',
     alignItems: 'center',
-    marginBottom: '8rem',
+    marginBottom: '6rem',
   },
   heroLeft: {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'flex-start',
     textAlign: 'left',
-  },
-  badge: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '8px',
-    backgroundColor: '#ffffff',
-    border: '1px solid #d8e8e1',
-    padding: '0.5rem 1rem',
-    borderRadius: '30px',
-    fontSize: '0.85rem',
-    color: '#2d4a3e',
-    marginBottom: '2rem',
-    boxShadow: '0 4px 10px rgba(0,44,28,0.03)',
-    fontWeight: '500',
-  },
-  badgePulse: {
-    width: '6px',
-    height: '6px',
-    backgroundColor: '#00bfa5',
-    borderRadius: '50%',
-    boxShadow: '0 0 0 4px rgba(0,191,165,0.2)',
   },
   heroText: {
     fontSize: '4.2rem',
