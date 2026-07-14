@@ -32,6 +32,7 @@ jobs:
       - name: Copy React build to ASP.NET wwwroot
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Force -Path CoreK.API/wwwroot | Out-Null
           Copy-Item -Path corek-ui/dist/* -Destination CoreK.API/wwwroot -Recurse -Force
 
       - name: Create production config
@@ -61,7 +62,15 @@ jobs:
       - name: Deploy to MonsterASP
         shell: pwsh
         run: |
-          $msdeploy = "C:\Program Files\IIS\Microsoft Web Deploy V3\msdeploy.exe"
+          $msdeployCandidates = @(
+            "C:\Program Files\IIS\Microsoft Web Deploy V3\msdeploy.exe",
+            "C:\Program Files (x86)\IIS\Microsoft Web Deploy V3\msdeploy.exe"
+          )
+          $msdeploy = $msdeployCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+          if (-not $msdeploy) {
+            throw "Web Deploy msdeploy.exe was not found on the runner."
+          }
 
           & $msdeploy `
             -verb:sync `

@@ -1,0 +1,24 @@
+# ASP.NET build outputs
+bin/
+obj/
+publish/
+publish-monsterasp/
+
+# React build outputs and dependencies
+corek-ui/dist/
+corek-ui/node_modules/
+
+# Local logs and agent scratch data
+.agents/
+*.log
+
+# Deployment and secret files
+*.publishSettings
+CoreK.API/appsettings.Production.json
+corek-monsterasp-publish.zip
+
+# IDE/user files
+.vs/
+.vscode/
+*.user
+*.suo
