@@ -49,7 +49,6 @@
   -ms-overflow-style: none;
 }
 
-.dashboard-shell.role-seller,
 .dashboard-shell.role-customer {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -180,13 +179,19 @@
 .dashboard-tab.active,
 .role-admin .dashboard-tab:hover,
 .role-admin .dashboard-tab.active,
-.role-seller .dashboard-tab:hover,
-.role-seller .dashboard-tab.active,
 .role-customer .dashboard-tab:hover,
 .role-customer .dashboard-tab.active {
   background: #ffffff;
   border-color: var(--core-mint);
   color: var(--core-teal);
+  box-shadow: none;
+}
+
+.role-seller .dashboard-tab:hover,
+.role-seller .dashboard-tab.active {
+  background: var(--core-teal);
+  border-color: var(--core-teal);
+  color: #ffffff;
   box-shadow: none;
 }
 
@@ -204,7 +209,6 @@
   scrollbar-gutter: stable;
 }
 
-.role-seller .dashboard-content,
 .role-customer .dashboard-content {
   padding-left: var(--app-page-x-padding);
   padding-right: var(--app-page-x-padding);
@@ -2558,7 +2562,6 @@ input[type='number'] {
     padding: 18px;
   }
 
-  .role-seller .dashboard-content,
   .role-customer .dashboard-content {
     padding-left: 18px;
     padding-right: 18px;

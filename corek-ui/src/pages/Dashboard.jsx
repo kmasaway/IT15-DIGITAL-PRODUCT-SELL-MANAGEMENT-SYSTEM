@@ -3553,7 +3553,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
 
   return (
     <div className={`dashboard-shell ${roleConfig.className} module-${activeRoleModule}`}>
-      {isAdmin && (
+      {!isCustomer && (
       <aside className="dashboard-sidebar">
         <div className="dashboard-user">
           <strong>{displayName}</strong>
