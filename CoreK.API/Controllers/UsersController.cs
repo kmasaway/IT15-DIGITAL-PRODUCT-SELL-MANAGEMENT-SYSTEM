@@ -41,11 +41,11 @@ namespace CoreK.API.Controllers
                         SubscriptionPlan = _context.SellerSubscriptions
                             .Where(s => s.SellerId == u.UserId)
                             .Select(s => s.Plan)
-                            .FirstOrDefault(),
+                            .FirstOrDefault() ?? (u.Role == "Seller" ? "Starter" : null),
                         SubscriptionSeats = _context.SellerSubscriptions
                             .Where(s => s.SellerId == u.UserId)
                             .Select(s => (int?)s.Seats)
-                            .FirstOrDefault(),
+                            .FirstOrDefault() ?? (u.Role == "Seller" ? (int?)1 : null),
                         ProductCount = _context.Products.Count(p => p.SellerId == u.UserId),
                         OrderCount = _context.Orders.Count(o => o.CustomerId == u.UserId),
                         TicketCount = _context.SupportTickets.Count(t => t.CustomerId == u.UserId)
@@ -65,8 +65,8 @@ namespace CoreK.API.Controllers
                         u.IsEmailVerified,
                         u.CreatedAt,
                         ValidIdStatus = (string?)null,
-                        SubscriptionPlan = (string?)null,
-                        SubscriptionSeats = (int?)null,
+                        SubscriptionPlan = u.Role == "Seller" ? "Starter" : null,
+                        SubscriptionSeats = u.Role == "Seller" ? (int?)1 : null,
                         ProductCount = _context.Products.Count(p => p.SellerId == u.UserId),
                         OrderCount = _context.Orders.Count(o => o.CustomerId == u.UserId),
                         TicketCount = _context.SupportTickets.Count(t => t.CustomerId == u.UserId)

@@ -4059,8 +4059,8 @@ export default function Dashboard({ user, userSessionName, activeModule: control
               const accountRole = account.role || account.Role || 'Customer';
               const isEmailVerified = account.isEmailVerified ?? account.IsEmailVerified;
               const validIdReview = validIdReviewRecords.find((record) => Number(record.userId) === Number(accountId));
-              const subscriptionPlan = account.subscriptionPlan || account.SubscriptionPlan || 'No plan';
-              const subscriptionSeats = account.subscriptionSeats || account.SubscriptionSeats || 0;
+              const subscriptionPlan = account.subscriptionPlan || account.SubscriptionPlan || defaultSubscriptionSettings.plan;
+              const subscriptionSeats = account.subscriptionSeats || account.SubscriptionSeats || defaultSubscriptionSettings.seats;
 
               return (
                 <tr key={accountId || email}>
