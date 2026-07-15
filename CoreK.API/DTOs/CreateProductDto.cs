@@ -14,6 +14,9 @@ namespace CoreK.API.DTOs
         [Range(0.01, 100000, ErrorMessage = "Price must be greater than zero.")]
         public decimal Price { get; set; }
 
+        [Range(0, 1000000, ErrorMessage = "Quantity cannot be negative.")]
+        public int Quantity { get; set; } = 100;
+
         [Required]
         public int CategoryId { get; set; }
 

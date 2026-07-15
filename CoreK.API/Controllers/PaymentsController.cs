@@ -35,6 +35,17 @@ namespace CoreK.API.Controllers
 
             if (product == null) return NotFound("Product is not available for checkout.");
 
+            var quantity = dto.Quantity <= 0 ? 1 : dto.Quantity;
+            if (product.Quantity <= 0)
+            {
+                return BadRequest(new { message = "This product is out of stock." });
+            }
+
+            if (quantity > product.Quantity)
+            {
+                return BadRequest(new { message = $"Only {product.Quantity} item(s) are available." });
+            }
+
             var customerId = IsAdmin && dto.CustomerId > 0 ? dto.CustomerId : CurrentUserId;
             if (customerId <= 0)
             {
@@ -72,12 +83,20 @@ namespace CoreK.API.Controllers
                 PayMongoPaymentIntentId = $"paymongo_mock_{Guid.NewGuid():N}",
                 ReferenceNumber = referenceNumber,
                 DownloadToken = Guid.NewGuid().ToString("N"),
-                TotalAmount = product.Price,
+                Quantity = quantity,
+                TotalAmount = product.Price * quantity,
                 Status = "Completed"
             };
 
             try
             {
+                product.Quantity -= quantity;
+                if (product.Quantity <= 0)
+                {
+                    product.Quantity = 0;
+                    product.IsActive = false;
+                }
+
                 _context.Orders.Add(order);
                 await _context.SaveChangesAsync();
             }
@@ -101,11 +120,14 @@ namespace CoreK.API.Controllers
                 order.ReferenceNumber,
                 order.DownloadToken,
                 order.Status,
+                order.Quantity,
                 order.TotalAmount,
+                RemainingQuantity = product.Quantity,
                 Product = new
                 {
                     product.ProductId,
                     product.Title,
+                    product.Quantity,
                     Category = product.Category?.CategoryName ?? "Digital Product",
                     LatestVersion = latestVersion?.VersionNumber ?? "1.0.0"
                 }
@@ -147,6 +169,7 @@ namespace CoreK.API.Controllers
                         o.PaymentMethod,
                         o.ReferenceNumber,
                         o.DownloadToken,
+                        o.Quantity,
                         o.TotalAmount,
                         o.Status,
                         o.CreatedAt,
@@ -192,6 +215,7 @@ namespace CoreK.API.Controllers
                         o.PaymentMethod,
                         o.ReferenceNumber,
                         o.DownloadToken,
+                        o.Quantity,
                         o.TotalAmount,
                         o.Status,
                         o.CreatedAt,
@@ -388,6 +412,18 @@ namespace CoreK.API.Controllers
             }
 
             if (payoutRequest == null) return NotFound(new { message = "Payout request was not found." });
+            if (payoutRequest.Status.Equals("Approved", StringComparison.OrdinalIgnoreCase)
+                && requestedStatus.Equals("Rejected", StringComparison.OrdinalIgnoreCase))
+            {
+                return Conflict(new { message = "Approved payout requests cannot be rejected." });
+            }
+
+            if ((payoutRequest.Status.Equals("Approved", StringComparison.OrdinalIgnoreCase)
+                    || payoutRequest.Status.Equals("Rejected", StringComparison.OrdinalIgnoreCase))
+                && !payoutRequest.Status.Equals(requestedStatus, StringComparison.OrdinalIgnoreCase))
+            {
+                return Conflict(new { message = "Reviewed payout requests cannot be changed to another final status." });
+            }
 
             payoutRequest.Status = allowedStatuses.First(status =>
                 status.Equals(requestedStatus, StringComparison.OrdinalIgnoreCase));

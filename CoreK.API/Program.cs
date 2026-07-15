@@ -246,6 +246,9 @@ static void EnsureSellerAccountTables(AppDbContext db, ILogger logger)
             IF OBJECT_ID(N'[Products]', N'U') IS NOT NULL AND COL_LENGTH(N'Products', N'ReviewedAt') IS NULL
                 ALTER TABLE [Products] ADD [ReviewedAt] datetime2 NULL;
 
+            IF OBJECT_ID(N'[Products]', N'U') IS NOT NULL AND COL_LENGTH(N'Products', N'Quantity') IS NULL
+                ALTER TABLE [Products] ADD [Quantity] int NOT NULL DEFAULT 100;
+
             IF OBJECT_ID(N'[Orders]', N'U') IS NOT NULL AND COL_LENGTH(N'Orders', N'CustomerName') IS NULL
                 ALTER TABLE [Orders] ADD [CustomerName] nvarchar(150) NOT NULL DEFAULT N'';
 
@@ -263,6 +266,9 @@ static void EnsureSellerAccountTables(AppDbContext db, ILogger logger)
 
             IF OBJECT_ID(N'[Orders]', N'U') IS NOT NULL AND COL_LENGTH(N'Orders', N'ProductId') IS NULL
                 ALTER TABLE [Orders] ADD [ProductId] int NOT NULL DEFAULT 0;
+
+            IF OBJECT_ID(N'[Orders]', N'U') IS NOT NULL AND COL_LENGTH(N'Orders', N'Quantity') IS NULL
+                ALTER TABLE [Orders] ADD [Quantity] int NOT NULL DEFAULT 1;
 
             IF OBJECT_ID(N'[SupportTickets]', N'U') IS NULL
             BEGIN

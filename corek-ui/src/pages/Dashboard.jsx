@@ -33,7 +33,6 @@ import { API_BASE_URL, api } from '../services/api';
 import './Dashboard.css';
 
 const MARKETPLACE_PAGE_SIZE = 20;
-const SELLER_SALES_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const API_ASSET_BASE_URL = API_BASE_URL.replace(/\/api\/?$/i, '');
 const PAYOUT_QR_SIZE = 21;
 
@@ -42,6 +41,7 @@ const emptyProductForm = {
   title: '',
   description: '',
   price: '',
+  quantity: '100',
   categoryId: '',
   isActive: true,
   coverPhotoFile: null,
@@ -142,6 +142,10 @@ function getProductCategory(product) {
   return product.category || product.categoryName || 'Digital Product';
 }
 
+function isCategoryArchived(category) {
+  return Boolean(category?.isArchived ?? category?.IsArchived);
+}
+
 function getMarketplaceAccent(index) {
   const accents = ['#eaf7f2', '#edf4ff', '#f5f1ff', '#fff4e8', '#eef8f6', '#f7f2ec', '#f0f7ee'];
   return accents[index % accents.length];
@@ -159,6 +163,14 @@ function getProductApprovalStatus(product) {
 
 function getProductReviewRemarks(product) {
   return product.reviewRemarks || product.ReviewRemarks || '';
+}
+
+function getProductQuantity(product) {
+  return Number(product?.quantity ?? product?.Quantity ?? 0);
+}
+
+function getOrderQuantity(order) {
+  return Number(order?.quantity ?? order?.Quantity ?? 1) || 1;
 }
 
 function formatFileCount(value) {
@@ -216,8 +228,42 @@ function normalizePriceInput(value) {
   return decimalParts.length > 0 ? `${normalizedWholePart}.${decimalPart}` : normalizedWholePart;
 }
 
+function normalizeWholeNumberInput(value, maxLength = 6) {
+  return String(value ?? '').replace(/\D/g, '').slice(0, maxLength);
+}
+
 function normalizePhilippinePhoneInput(value) {
   return String(value ?? '').replace(/\D/g, '').slice(0, 11);
+}
+
+function buildDailySalesTrend(orderRows) {
+  const salesByDate = new Map();
+
+  orderRows.forEach((order) => {
+    const orderDate = new Date(order.createdAt);
+    if (Number.isNaN(orderDate.getTime())) return;
+
+    const key = orderDate.toISOString().slice(0, 10);
+    const existing = salesByDate.get(key) || {
+      key,
+      label: new Intl.DateTimeFormat('en-PH', { month: 'short', day: 'numeric' }).format(orderDate),
+      orders: 0,
+      percentage: 0,
+      sales: 0,
+    };
+
+    existing.orders += 1;
+    existing.sales += Number(order.totalAmount || 0);
+    salesByDate.set(key, existing);
+  });
+
+  const points = Array.from(salesByDate.values()).sort((first, second) => first.key.localeCompare(second.key));
+  const totalSales = points.reduce((sum, point) => sum + point.sales, 0);
+
+  return points.map((point) => ({
+    ...point,
+    percentage: totalSales > 0 ? (point.sales / totalSales) * 100 : 0,
+  }));
 }
 
 function isPhilippinePhoneNumber(value) {
@@ -535,6 +581,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
   const [ticketForm, setTicketForm] = useState(emptyTicketForm);
   const [checkoutForm, setCheckoutForm] = useState({
     productId: '',
+    quantity: '1',
     paymentMethod: 'GCash',
   });
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -553,6 +600,8 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     ...defaultSubscriptionSettings,
     billingEmail: activeUser.email || activeUser.Email || '',
   }));
+  const [activeSubscriptionAccount, setActiveSubscriptionAccount] = useState(null);
+  const [adminSubscriptionSettings, setAdminSubscriptionSettings] = useState(defaultSubscriptionSettings);
   const [isLibraryFilterOpen, setIsLibraryFilterOpen] = useState(false);
   const [libraryFilters, setLibraryFilters] = useState({
     start: '',
@@ -706,31 +755,10 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     [payoutDateFilters, payoutRequests]
   );
 
-  const sellerSalesTrend = useMemo(() => {
-    const monthlySales = SELLER_SALES_MONTHS.map((label, index) => ({
-      key: String(index),
-      label,
-      orders: 0,
-      percentage: 0,
-      sales: 0,
-    }));
-
-    completedRoleOrders.forEach((order) => {
-      const orderDate = new Date(order.createdAt);
-      if (Number.isNaN(orderDate.getTime())) return;
-
-      const month = orderDate.getMonth();
-      monthlySales[month].orders += 1;
-      monthlySales[month].sales += Number(order.totalAmount || 0);
-    });
-
-    const totalSales = monthlySales.reduce((sum, month) => sum + month.sales, 0);
-
-    return monthlySales.map((month) => ({
-      ...month,
-      percentage: totalSales > 0 ? (month.sales / totalSales) * 100 : 0,
-    }));
-  }, [completedRoleOrders]);
+  const sellerSalesTrend = useMemo(
+    () => buildDailySalesTrend(completedRoleOrders),
+    [completedRoleOrders]
+  );
 
   const activeSalesTrendPoint = useMemo(
     () => sellerSalesTrend.find((point) => point.key === activeSalesTrendKey)
@@ -740,33 +768,10 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     [activeSalesTrendKey, sellerSalesTrend]
   );
 
-  const adminSalesTrend = useMemo(() => {
-    const monthlySales = SELLER_SALES_MONTHS.map((label, index) => ({
-      key: String(index),
-      label,
-      orders: 0,
-      percentage: 0,
-      sales: 0,
-    }));
-
-    orders
-      .filter((order) => String(order.status || '').toLowerCase() === 'completed')
-      .forEach((order) => {
-        const orderDate = new Date(order.createdAt);
-        if (Number.isNaN(orderDate.getTime())) return;
-
-        const month = orderDate.getMonth();
-        monthlySales[month].orders += 1;
-        monthlySales[month].sales += Number(order.totalAmount || 0);
-      });
-
-    const totalSales = monthlySales.reduce((sum, month) => sum + month.sales, 0);
-
-    return monthlySales.map((month) => ({
-      ...month,
-      percentage: totalSales > 0 ? (month.sales / totalSales) * 100 : 0,
-    }));
-  }, [orders]);
+  const adminSalesTrend = useMemo(
+    () => buildDailySalesTrend(orders.filter((order) => String(order.status || '').toLowerCase() === 'completed')),
+    [orders]
+  );
 
   const activeAdminSalesTrendPoint = useMemo(
     () => adminSalesTrend.find((point) => point.key === activeAdminSalesTrendKey)
@@ -783,27 +788,10 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     return roleOrders.filter((order) => isWithinDateRange(order.createdAt, libraryFilters));
   }, [dateFilteredRoleOrders, isCustomer, isSeller, libraryFilters, roleOrders]);
 
-  const purchasedProductOptions = useMemo(() => {
-    const productById = new Map(products.map((product) => [Number(product.productId), product]));
-    const options = new Map();
-
-    roleOrders.forEach((order) => {
-      const productId = Number(order.productId);
-      if (!productId || options.has(productId)) return;
-
-      const product = productById.get(productId);
-      options.set(productId, {
-        productId,
-        title: order.productTitle || product?.title || 'Purchased Product',
-      });
-    });
-
-    return Array.from(options.values());
-  }, [products, roleOrders]);
-
   const marketplaceCategoryOptions = useMemo(() => {
-    const categoryOptions = categories.length
-      ? categories.map((category) => ({
+    const activeCategories = categories.filter((category) => !isCategoryArchived(category));
+    const categoryOptions = activeCategories.length
+      ? activeCategories.map((category) => ({
         value: String(category.categoryId),
         label: category.categoryName,
         count: products.filter((product) => Number(product.categoryId) === Number(category.categoryId)).length,
@@ -1169,6 +1157,12 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       return;
     }
 
+    const currentStatus = getPayoutStatus(payoutRequest);
+    if (['Approved', 'Rejected'].includes(currentStatus) && currentStatus !== status) {
+      showError(`${currentStatus} payout requests cannot be changed.`);
+      return;
+    }
+
     let remarks = '';
     if (status === 'Rejected') {
       remarks = await requestReason({
@@ -1271,6 +1265,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
         title: product.title,
         description: product.description,
         price: Number(product.price),
+        quantity: getProductQuantity(product),
         categoryId: Number(product.categoryId),
         isActive: true,
         approvalStatus: 'Approved',
@@ -1319,6 +1314,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
         title: product.title,
         description: product.description,
         price: Number(product.price),
+        quantity: getProductQuantity(product),
         categoryId: Number(product.categoryId),
         isActive: false,
         approvalStatus: 'Rejected',
@@ -1338,6 +1334,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
         title: product.title,
         description: product.description,
         price: product.price,
+        quantity: String(getProductQuantity(product)),
         categoryId: product.categoryId,
         isActive: product.isActive,
         coverPhotoFile: null,
@@ -1377,6 +1374,8 @@ export default function Dashboard({ user, userSessionName, activeModule: control
           || '1.0.0',
         thumbnailUrl: productDetails.thumbnailUrl || product.thumbnailUrl,
         coverPhotoUrl: productDetails.coverPhotoUrl || product.coverPhotoUrl,
+        quantity: productDetails.quantity ?? productDetails.Quantity ?? product.quantity ?? product.Quantity ?? 0,
+        Quantity: productDetails.Quantity ?? productDetails.quantity ?? product.Quantity ?? product.quantity ?? 0,
         sellerName: productDetails.sellerName || product.sellerName,
         SellerName: productDetails.SellerName || product.SellerName,
         sellerPhoneNumber: productDetails.sellerPhoneNumber || product.sellerPhoneNumber,
@@ -1611,12 +1610,16 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     }
 
     return (
-      <div className="sales-trend-chart" aria-label="Monthly sales graph from completed seller orders">
+      <div
+        className="sales-trend-chart"
+        style={{ '--sales-point-count': Math.max(trendPoints.length, 1) }}
+        aria-label="Daily sales graph from completed orders"
+      >
         <div className="sales-trend-months" aria-hidden="true">
           {trendPoints.map((point) => <span key={point.key}>{point.label}</span>)}
         </div>
 
-        <div className="sales-trend-plot" role="group" aria-label="Interactive monthly sales percentages">
+        <div className="sales-trend-plot" role="group" aria-label="Interactive daily sales percentages">
           <div className="sales-trend-grid" aria-hidden="true">
             <span />
             <span />
@@ -1930,6 +1933,12 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       return;
     }
 
+    const quantity = Number(productForm.quantity || 0);
+    if (!Number.isInteger(quantity) || quantity < 0) {
+      showError('Enter a valid product quantity.');
+      return;
+    }
+
     if (productForm.productId) {
       const confirmed = await requestConfirmation({
         title: 'Save Product?',
@@ -1945,6 +1954,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
           title: productForm.title,
           description: productForm.description,
           price,
+          quantity,
           categoryId: Number(productForm.categoryId),
           isActive: productForm.isActive,
         });
@@ -1959,6 +1969,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
         formData.append('title', productForm.title);
         formData.append('description', productForm.description);
         formData.append('price', price.toFixed(2));
+        formData.append('quantity', String(quantity));
         formData.append('categoryId', productForm.categoryId);
         formData.append('sellerId', userId);
         formData.append('file', productForm.coverPhotoFile);
@@ -1976,6 +1987,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
             title: productForm.title,
             description: productForm.description,
             price,
+            quantity,
             isActive: false,
             createdAt: new Date().toISOString(),
             category: selectedCategory?.categoryName || 'Digital Product',
@@ -2019,11 +2031,11 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       formData.append('changelog', versionForm.changelog);
       formData.append('file', versionForm.file);
 
-      await api.addProductVersion(versionForm.productId, formData);
+      const result = await api.addProductVersion(versionForm.productId, formData);
       setVersionForm(emptyVersionForm);
       setIsProductModalOpen(false);
       setProductModalMode('details');
-      showNotice('Product version pushed.');
+      showNotice(isSeller ? 'Product version submitted for admin review.' : result.message || 'Product version pushed.');
       await loadDashboard();
     } catch (err) {
       showError(err.message);
@@ -2049,9 +2061,26 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       return;
     }
 
+    const quantity = Number(checkoutForm.quantity || 1);
+    const availableQuantity = getProductQuantity(product);
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      showError('Enter a valid quantity.');
+      return;
+    }
+
+    if (availableQuantity <= 0) {
+      showError('This product is out of stock.');
+      return;
+    }
+
+    if (quantity > availableQuantity) {
+      showError(`Only ${availableQuantity} item(s) are available.`);
+      return;
+    }
+
     const confirmed = await requestConfirmation({
       title: 'Buy Product?',
-      message: `Confirm purchase of ${product.title} for ${formatMoney(product.price)}.`,
+      message: `Confirm purchase of ${quantity} ${quantity === 1 ? 'item' : 'items'} of ${product.title} for ${formatMoney(Number(product.price || 0) * quantity)}.`,
       confirmLabel: 'Continue',
     });
     if (!confirmed) return;
@@ -2066,6 +2095,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     try {
       const result = await api.checkout({
         productId: product.productId,
+        quantity,
         customerId: userId,
         customerName: profile.fullName,
         customerEmail: profile.email,
@@ -2073,7 +2103,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       });
 
       showNotice(`Payment completed. Reference ${result.referenceNumber}.`);
-      setCheckoutForm({ productId: '', paymentMethod: 'GCash' });
+      setCheckoutForm({ productId: '', quantity: '1', paymentMethod: 'GCash' });
       setActiveProductView(null);
       await loadDashboard();
     } catch (err) {
@@ -2108,16 +2138,16 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       return;
     }
 
-    if (!isAdmin && !validIdRecord) {
+    if (isSeller && !validIdRecord) {
       showError('Submit a valid ID before saving your profile.');
       setIsValidIdModalOpen(true);
       return;
     }
 
     const confirmed = await requestConfirmation({
-      title: isSeller ? 'Save Account Settings?' : 'Save Profile?',
+      title: 'Save Account Settings?',
       message: 'Please confirm that the account details are correct before saving.',
-      confirmLabel: isSeller ? 'Save Settings' : 'Save Profile',
+      confirmLabel: 'Save Settings',
     });
     if (!confirmed) return;
 
@@ -2125,7 +2155,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       const result = await api.updateProfile(userId, profile);
       const nextUser = result.user || {};
       localStorage.setItem('corek_user', JSON.stringify(nextUser));
-      showNotice(isSeller ? 'Settings saved.' : 'Profile saved.');
+      showNotice('Settings saved.');
       await loadDashboard();
     } catch (err) {
       showError(err.message);
@@ -2133,6 +2163,8 @@ export default function Dashboard({ user, userSessionName, activeModule: control
   };
 
   const handleArchiveCategory = async (category) => {
+    if (isCategoryArchived(category)) return;
+
     const confirmed = await requestConfirmation({
       title: 'Archive Category?',
       message: `${category.categoryName} will be hidden from new listings but existing product data will stay intact.`,
@@ -2235,8 +2267,79 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     }
   };
 
+  const openAdminSubscriptionModal = async (account) => {
+    const accountId = account.userId || account.UserId;
+    const accountRole = account.role || account.Role || 'Customer';
+    if (accountRole !== 'Seller') {
+      showError('Subscriptions are only available for seller accounts.');
+      return;
+    }
+
+    const fallbackEmail = account.email || account.Email || '';
+    setActiveSubscriptionAccount(account);
+    setAdminSubscriptionSettings(normalizeSubscriptionSettings({
+      plan: account.subscriptionPlan || account.SubscriptionPlan,
+      seats: account.subscriptionSeats || account.SubscriptionSeats,
+      billingEmail: fallbackEmail,
+    }, fallbackEmail));
+
+    try {
+      const subscription = await api.getSubscription(accountId);
+      setAdminSubscriptionSettings(normalizeSubscriptionSettings(subscription, fallbackEmail));
+    } catch (err) {
+      showError(err.message || 'Unable to load subscription settings.');
+    }
+  };
+
+  const handleAdminSubscriptionSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!activeSubscriptionAccount) return;
+
+    const accountId = activeSubscriptionAccount.userId || activeSubscriptionAccount.UserId;
+    const seats = Number(adminSubscriptionSettings.seats);
+    if (!Number.isInteger(seats) || seats < 1 || seats > 50) {
+      showError('Subscription seats must be a whole number from 1 to 50.');
+      return;
+    }
+
+    if (!adminSubscriptionSettings.billingEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminSubscriptionSettings.billingEmail)) {
+      showError('Enter a valid billing email for the subscription.');
+      return;
+    }
+
+    const confirmed = await requestConfirmation({
+      title: 'Save Seller Subscription?',
+      message: 'Confirm the subscription settings for this seller account.',
+      confirmLabel: 'Save Subscription',
+    });
+    if (!confirmed) return;
+
+    try {
+      const result = await api.updateSubscription(accountId, {
+        plan: adminSubscriptionSettings.plan,
+        billingCycle: adminSubscriptionSettings.billingCycle,
+        billingEmail: adminSubscriptionSettings.billingEmail,
+        seats,
+        autoRenew: adminSubscriptionSettings.autoRenew,
+      });
+      const savedSubscription = normalizeSubscriptionSettings(result.subscription || result, adminSubscriptionSettings.billingEmail);
+      setAdminSubscriptionSettings(savedSubscription);
+      setActiveSubscriptionAccount(null);
+      showNotice('Subscription saved.', result.message || 'Seller subscription settings were updated.');
+      await loadDashboard();
+    } catch (err) {
+      showError(err.message || 'Unable to save subscription.');
+    }
+  };
+
   const handleTicketSubmit = async (event) => {
     event.preventDefault();
+
+    if (isCustomer && !ticketForm.orderId) {
+      showError('Select an order for this support ticket.');
+      return;
+    }
 
     try {
       await api.createTicket({
@@ -2260,6 +2363,12 @@ export default function Dashboard({ user, userSessionName, activeModule: control
   };
 
   const handleTicketStatus = async (ticket, status) => {
+    const currentStatus = ticket?.status || ticket?.Status || '';
+    if (isAdmin && ['Approved', 'Rejected'].includes(currentStatus) && currentStatus !== status) {
+      showError(`${currentStatus} support tickets cannot be changed.`);
+      return;
+    }
+
     let remarks = '';
     if (isAdmin && status === 'Rejected') {
       remarks = await requestReason({
@@ -2546,7 +2655,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
 
               <div className="discover-product-version">
                 <span>Version {product.latestVersion || '1.0.0'}</span>
-                <span>{formatFileCount(product.versionCount)}</span>
+                <span>{getProductQuantity(product)} left</span>
               </div>
 
               <div className="discover-product-footer">
@@ -2659,6 +2768,19 @@ export default function Dashboard({ user, userSessionName, activeModule: control
             </div>
 
             <div className="field">
+              <label>Quantity</label>
+              <input
+                required
+                inputMode="numeric"
+                value={productForm.quantity}
+                onChange={(e) => setProductForm({
+                  ...productForm,
+                  quantity: normalizeWholeNumberInput(e.target.value),
+                })}
+              />
+            </div>
+
+            <div className="field">
               <label>Digital Content</label>
               <div className="content-upload-grid single">
                 <label aria-label="Upload product image">
@@ -2706,7 +2828,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                 onChange={(e) => setProductForm({ ...productForm, categoryId: e.target.value })}
               >
                 <option value="">Select category</option>
-                {categories.map((category) => (
+                {categories.filter((category) => !isCategoryArchived(category)).map((category) => (
                   <option key={category.categoryId} value={category.categoryId}>
                     {category.categoryName}
                   </option>
@@ -2896,6 +3018,20 @@ export default function Dashboard({ user, userSessionName, activeModule: control
           {isCustomer && (
             <>
               <label className="inline-payment-select">
+                <span>Quantity</span>
+                <input
+                  min="1"
+                  max={Math.max(getProductQuantity(activeProductView), 1)}
+                  inputMode="numeric"
+                  value={checkoutForm.quantity}
+                  onChange={(event) => setCheckoutForm({
+                    ...checkoutForm,
+                    quantity: normalizeWholeNumberInput(event.target.value, 4) || '1',
+                  })}
+                />
+              </label>
+
+              <label className="inline-payment-select">
                 <span>Payment</span>
                 <select
                   value={checkoutForm.paymentMethod}
@@ -3043,6 +3179,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                   <th>Product</th>
                   <th>Category</th>
                   <th className="money-cell">Price</th>
+                  <th className="number-cell">Qty</th>
                   <th className="number-cell">Version</th>
                   <th>Status</th>
                   <th>Actions</th>
@@ -3064,6 +3201,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                     </td>
                     <td>{product.category || product.categoryName}</td>
                     <td className="money-cell">{formatMoney(product.price)}</td>
+                    <td className="number-cell">{getProductQuantity(product)}</td>
                     <td className="number-cell">
                       {product.latestVersion || '1.0.0'} / {formatFileCount(product.versionCount)}
                     </td>
@@ -3107,15 +3245,26 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                           </button>
                         </>
                       ) : (
-                        <button
-                          className="button secondary icon-only-button compact-view-button"
-                          type="button"
-                          aria-label={`View ${product.title}`}
-                          title="View Product"
-                          onClick={() => openProductViewModal(product)}
-                        >
-                          <Eye size={14} />
-                        </button>
+                        <>
+                          <button
+                            className="button secondary icon-only-button compact-view-button"
+                            type="button"
+                            aria-label={`View ${product.title}`}
+                            title="View Product"
+                            onClick={() => openProductViewModal(product)}
+                          >
+                            <Eye size={14} />
+                          </button>
+                          <button
+                            className="button secondary icon-only-button"
+                            type="button"
+                            aria-label={`Add product version for ${product.title}`}
+                            title="Product Version"
+                            onClick={() => openVersionModal(product.productId)}
+                          >
+                            <UploadCloud size={14} />
+                          </button>
+                        </>
                       )}
                     </td>
                   </tr>
@@ -3124,7 +3273,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
 
                 {roleProducts.length === 0 && (
                   <tr>
-                    <td colSpan="6">
+                    <td colSpan="7">
                       <div className="empty-state">No products available.</div>
                     </td>
                   </tr>
@@ -3175,12 +3324,16 @@ export default function Dashboard({ user, userSessionName, activeModule: control
         <h2>Marketplace Categories</h2>
 
         <div className="mini-list">
-          {categories.map((category) => (
-            <div className="mini-row" key={category.categoryId}>
+          {categories.map((category) => {
+            const archived = isCategoryArchived(category);
+
+            return (
+            <div className={`mini-row ${archived ? 'archived-row' : ''}`} key={category.categoryId}>
               <div>
                 <strong>{category.categoryName}</strong>
                 <span>
                   {category.description || 'No description'} / {category.productCount} products
+                  {archived ? ' / Archived' : ''}
                 </span>
               </div>
 
@@ -3188,15 +3341,17 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                 <button
                   className="button icon-only-button action-archive"
                   type="button"
+                  disabled={archived}
                   aria-label={`Archive ${category.categoryName}`}
-                  title="Archive"
+                  title={archived ? 'Archived' : 'Archive'}
                   onClick={() => handleArchiveCategory(category)}
                 >
                   <Archive size={14} />
                 </button>
               )}
             </div>
-          ))}
+          );
+          })}
 
           {categories.length === 0 && <div className="empty-state">No categories yet.</div>}
         </div>
@@ -3249,8 +3404,9 @@ export default function Dashboard({ user, userSessionName, activeModule: control
 
   const renderPayments = () => {
     const paymentRows = isSeller ? dateFilteredRoleOrders : filteredLibraryOrders;
-    const showSegmentedPayments = isSeller || isAdmin;
-    const activePaymentsTableTab = showSegmentedPayments ? paymentsTableTab : 'records';
+    const showSegmentedPayments = isSeller;
+    const showPayoutDateControls = isSeller || isAdmin;
+    const activePaymentsTableTab = isAdmin ? 'payouts' : showSegmentedPayments ? paymentsTableTab : 'records';
     const payoutQrSeed = [
       profile.payoutMethod || 'GCash',
       profile.payoutAccountName || displayName,
@@ -3295,11 +3451,26 @@ export default function Dashboard({ user, userSessionName, activeModule: control
               </div>
 
               <div className="field">
+                <label>Quantity</label>
+                <input
+                  required
+                  inputMode="numeric"
+                  value={checkoutForm.quantity}
+                  onChange={(e) => setCheckoutForm({
+                    ...checkoutForm,
+                    quantity: normalizeWholeNumberInput(e.target.value, 4) || '1',
+                  })}
+                />
+              </div>
+
+              <div className="field">
                 <label>Total</label>
                 <input
                   className="number-input"
                   readOnly
-                  value={selectedCheckoutProduct ? formatMoney(selectedCheckoutProduct.price) : formatMoney(0)}
+                  value={selectedCheckoutProduct
+                    ? formatMoney(Number(selectedCheckoutProduct.price || 0) * Number(checkoutForm.quantity || 1))
+                    : formatMoney(0)}
                 />
               </div>
             </div>
@@ -3442,7 +3613,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
               aria-selected={activePaymentsTableTab === 'records'}
               onClick={() => setPaymentsTableTab('records')}
             >
-              {isSeller ? 'Sales Records' : 'Payment Records'}
+              Sales Records
             </button>
             <button
               className={activePaymentsTableTab === 'payouts' ? 'active' : ''}
@@ -3451,7 +3622,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
               aria-selected={activePaymentsTableTab === 'payouts'}
               onClick={() => setPaymentsTableTab('payouts')}
             >
-              {isSeller ? 'Payout Request History' : 'Payout Requests'}
+              Payout Request History
             </button>
           </div>
         )}
@@ -3461,16 +3632,16 @@ export default function Dashboard({ user, userSessionName, activeModule: control
             <h2>
               {activePaymentsTableTab === 'payouts'
                 ? isAdmin ? 'Payout Requests' : 'Payout Request History'
-                : isCustomer ? 'Purchase Records' : isSeller ? 'Sales Records' : 'Payment Records'}
+                : isCustomer ? 'Purchase Records' : 'Sales Records'}
             </h2>
             {isCustomer && <p>Date range: {formatDateRange(libraryFilters)}</p>}
             {isSeller && activePaymentsTableTab === 'records' && <p>Date range: {formatDateRange(sellerDateFilters)}</p>}
-            {showSegmentedPayments && activePaymentsTableTab === 'payouts' && <p>Date range: {formatDateRange(payoutDateFilters)}</p>}
+            {showPayoutDateControls && activePaymentsTableTab === 'payouts' && <p>Date range: {formatDateRange(payoutDateFilters)}</p>}
           </div>
 
           {isSeller && activePaymentsTableTab === 'records' && renderSellerDateFilter('', { plain: true, compact: true, controlsOnly: true })}
 
-          {showSegmentedPayments && activePaymentsTableTab === 'payouts' && (
+          {showPayoutDateControls && activePaymentsTableTab === 'payouts' && (
             <div className="date-filter-controls payout-history-filter">
               <label>
                 <span>Start</span>
@@ -3513,6 +3684,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                   <th>Reference No.</th>
                   <th>{isCustomer ? 'Seller' : 'Customer'}</th>
                   <th>Product</th>
+                  <th className="number-cell">Qty</th>
                   <th className="money-cell">Total</th>
                   <th className="center-cell">Status</th>
                   {!isAdmin && (
@@ -3529,6 +3701,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                     <td>{order.referenceNumber}</td>
                     <td>{isCustomer ? getOrderSellerName(order) : order.customerName}</td>
                     <td>{order.productTitle}</td>
+                    <td className="number-cell">{getOrderQuantity(order)}</td>
                     <td className="money-cell">{formatMoney(order.totalAmount)}</td>
                     <td className="center-cell">{isAdmin || isCustomer ? renderTextStatus(order.status) : renderStatus(order.status)}</td>
                     {!isAdmin && (
@@ -3543,7 +3716,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
 
                 {paymentRows.length === 0 && (
                   <tr>
-                    <td colSpan={isAdmin ? 5 : 6}>
+                    <td colSpan={isAdmin ? 6 : 7}>
                       <div className="empty-state">No payment records match this view.</div>
                     </td>
                   </tr>
@@ -3568,6 +3741,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
               <tbody>
                 {filteredPayoutRequests.map((request) => {
                   const payoutStatus = getPayoutStatus(request);
+                  const isFinalPayout = ['Approved', 'Rejected'].includes(payoutStatus);
                   const requestedAt = request.requestedAt || request.RequestedAt;
                   const destination = [
                     request.payoutMethod || request.PayoutMethod || 'GCash',
@@ -3590,7 +3764,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                           {['Approved', 'Rejected'].map((status) => (
                             <button
                               className={`button icon-only-button ${status === 'Approved' ? 'action-approve' : 'action-reject'}`}
-                              disabled={payoutStatus === status}
+                              disabled={payoutStatus === status || (isFinalPayout && payoutStatus !== status)}
                               key={status}
                               type="button"
                               aria-label={`${status} payout request`}
@@ -3819,6 +3993,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
               <th>Role</th>
               <th>Email</th>
               <th>Valid ID</th>
+              <th>Subscription</th>
               <th>Review</th>
               <th className="number-cell">Products</th>
               <th className="number-cell">Orders</th>
@@ -3835,6 +4010,8 @@ export default function Dashboard({ user, userSessionName, activeModule: control
               const accountRole = account.role || account.Role || 'Customer';
               const isEmailVerified = account.isEmailVerified ?? account.IsEmailVerified;
               const validIdReview = validIdReviewRecords.find((record) => Number(record.userId) === Number(accountId));
+              const subscriptionPlan = account.subscriptionPlan || account.SubscriptionPlan || 'No plan';
+              const subscriptionSeats = account.subscriptionSeats || account.SubscriptionSeats || 0;
 
               return (
                 <tr key={accountId || email}>
@@ -3845,6 +4022,15 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                   <td>{accountRole}</td>
                   <td>{renderTextStatus(isEmailVerified ? 'Verified' : 'Unverified')}</td>
                   <td>{renderTextStatus(validIdReview?.status || 'Missing')}</td>
+                  <td>
+                    {accountRole === 'Seller' ? (
+                      <span className="subscription-pill">
+                        {subscriptionPlan} / {subscriptionSeats || defaultSubscriptionSettings.seats} seats
+                      </span>
+                    ) : (
+                      <span className="table-note">N/A</span>
+                    )}
+                  </td>
                   <td className="actions">
                     {validIdReview ? (
                       <>
@@ -3879,6 +4065,17 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                     ) : (
                       <span className="table-note">No ID</span>
                     )}
+                    {accountRole === 'Seller' && (
+                      <button
+                        className="button secondary icon-only-button"
+                        type="button"
+                        aria-label={`Manage subscription for ${fullName}`}
+                        title="Manage Subscription"
+                        onClick={() => openAdminSubscriptionModal(account)}
+                      >
+                        <CreditCard size={14} />
+                      </button>
+                    )}
                   </td>
                   <td className="number-cell">{account.productCount || account.ProductCount || 0}</td>
                   <td className="number-cell">{account.orderCount || account.OrderCount || 0}</td>
@@ -3890,7 +4087,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
 
             {users.length === 0 && (
               <tr>
-                <td colSpan="10">
+                <td colSpan="11">
                   <div className="empty-state">No users found yet.</div>
                 </td>
               </tr>
@@ -3900,6 +4097,104 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       </div>
     </div>
   );
+
+  const renderAdminSubscriptionModal = () => {
+    if (!activeSubscriptionAccount) return null;
+
+    const accountName = activeSubscriptionAccount.fullName || activeSubscriptionAccount.FullName || 'Seller account';
+
+    return (
+      <DashboardModal
+        title="Seller Subscription"
+        subtitle={accountName}
+        onClose={() => setActiveSubscriptionAccount(null)}
+        size="wide"
+      >
+        <form className="subscription-settings-panel" onSubmit={handleAdminSubscriptionSubmit} noValidate>
+          <div className="subscription-summary-grid">
+            <div>
+              <span>Current Plan</span>
+              <strong>{adminSubscriptionSettings.plan}</strong>
+            </div>
+            <div>
+              <span>Billing</span>
+              <strong>{adminSubscriptionSettings.billingCycle}</strong>
+            </div>
+            <div>
+              <span>Seats</span>
+              <strong>{adminSubscriptionSettings.seats}</strong>
+            </div>
+          </div>
+
+          <div className="form-grid subscription-form-grid">
+            <div className="field">
+              <label>Plan</label>
+              <select
+                value={adminSubscriptionSettings.plan}
+                onChange={(e) => setAdminSubscriptionSettings({ ...adminSubscriptionSettings, plan: e.target.value })}
+              >
+                <option value="Starter">Starter</option>
+                <option value="Professional">Professional</option>
+                <option value="Enterprise">Enterprise</option>
+              </select>
+            </div>
+
+            <div className="field">
+              <label>Billing Cycle</label>
+              <select
+                value={adminSubscriptionSettings.billingCycle}
+                onChange={(e) => setAdminSubscriptionSettings({ ...adminSubscriptionSettings, billingCycle: e.target.value })}
+              >
+                <option value="Monthly">Monthly</option>
+                <option value="Quarterly">Quarterly</option>
+                <option value="Annual">Annual</option>
+              </select>
+            </div>
+
+            <div className="field">
+              <label>Billing Email</label>
+              <input
+                type="email"
+                value={adminSubscriptionSettings.billingEmail}
+                onChange={(e) => setAdminSubscriptionSettings({ ...adminSubscriptionSettings, billingEmail: e.target.value })}
+              />
+            </div>
+
+            <div className="field">
+              <label>Workspace Seats</label>
+              <input
+                inputMode="numeric"
+                value={adminSubscriptionSettings.seats}
+                onChange={(e) => setAdminSubscriptionSettings({
+                  ...adminSubscriptionSettings,
+                  seats: normalizeWholeNumberInput(e.target.value, 2),
+                })}
+              />
+            </div>
+
+            <label className="field checkbox-row subscription-renewal-toggle">
+              <input
+                type="checkbox"
+                checked={adminSubscriptionSettings.autoRenew}
+                onChange={(e) => setAdminSubscriptionSettings({ ...adminSubscriptionSettings, autoRenew: e.target.checked })}
+              />
+              <span>Auto-renew subscription</span>
+            </label>
+          </div>
+
+          <div className="toolbar modal-actions">
+            <button className="button" type="submit">
+              Save Subscription
+              <Save size={16} />
+            </button>
+            <button className="button secondary" type="button" onClick={() => setActiveSubscriptionAccount(null)}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      </DashboardModal>
+    );
+  };
 
   const renderProfile = () => {
     if (isAdmin) {
@@ -3975,7 +4270,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
         onSubmit={handleProfileSubmit}
         noValidate
       >
-        <h2>{isSeller ? 'Account Settings' : 'Profile and Payout Details'}</h2>
+        <h2>Account Settings</h2>
 
         <div className="form-grid">
           <div className="field">
@@ -4011,58 +4306,62 @@ export default function Dashboard({ user, userSessionName, activeModule: control
             />
           </div>
 
-          <div className="field">
-            <label>Payout Method</label>
-            <select
-              value={profile.payoutMethod}
-              onChange={(e) => setProfile({ ...profile, payoutMethod: e.target.value })}
-            >
-              <option value="GCash">GCash</option>
-              <option value="Maya">Maya</option>
-              <option value="Bank Transfer">Bank Transfer</option>
-            </select>
-          </div>
-
-          <div className="field">
-            <label>Payout Account Name</label>
-            <input
-              value={profile.payoutAccountName}
-              onChange={(e) => setProfile({ ...profile, payoutAccountName: e.target.value })}
-            />
-          </div>
-
-          <div className="field">
-            <label>Payout Account Number</label>
-            <input
-              value={profile.payoutAccountNumber}
-              onChange={(e) => setProfile({ ...profile, payoutAccountNumber: e.target.value })}
-            />
-          </div>
-
-          <div className="field full">
-            <div className="identity-card">
-              <div>
-                <strong>Valid ID</strong>
-                <span>
-                  {validIdRecord
-                    ? `${validIdRecord.idType} submitted on ${formatDate(validIdRecord.submittedAt)}`
-                    : 'Required before profile changes can be saved'}
-                </span>
+          {isSeller && (
+            <>
+              <div className="field">
+                <label>Payout Method</label>
+                <select
+                  value={profile.payoutMethod}
+                  onChange={(e) => setProfile({ ...profile, payoutMethod: e.target.value })}
+                >
+                  <option value="GCash">GCash</option>
+                  <option value="Maya">Maya</option>
+                  <option value="Bank Transfer">Bank Transfer</option>
+                </select>
               </div>
 
-              <div className="identity-card-actions">
-                {renderStatus(validIdRecord?.status || 'Required')}
-                <button className="button secondary" type="button" onClick={openValidIdModal}>
-                  {validIdRecord ? 'Update ID' : 'Add Valid ID'}
-                </button>
+              <div className="field">
+                <label>Payout Account Name</label>
+                <input
+                  value={profile.payoutAccountName}
+                  onChange={(e) => setProfile({ ...profile, payoutAccountName: e.target.value })}
+                />
               </div>
-            </div>
-          </div>
 
-          <div className="field full">
-            <label>Bio</label>
-            <textarea value={profile.bio} onChange={(e) => setProfile({ ...profile, bio: e.target.value })} />
-          </div>
+              <div className="field">
+                <label>Payout Account Number</label>
+                <input
+                  value={profile.payoutAccountNumber}
+                  onChange={(e) => setProfile({ ...profile, payoutAccountNumber: e.target.value })}
+                />
+              </div>
+
+              <div className="field full">
+                <div className="identity-card">
+                  <div>
+                    <strong>Valid ID</strong>
+                    <span>
+                      {validIdRecord
+                        ? `${validIdRecord.idType} submitted on ${formatDate(validIdRecord.submittedAt)}`
+                        : 'Required before profile changes can be saved'}
+                    </span>
+                  </div>
+
+                  <div className="identity-card-actions">
+                    {renderStatus(validIdRecord?.status || 'Required')}
+                    <button className="button secondary" type="button" onClick={openValidIdModal}>
+                      {validIdRecord ? 'Update ID' : 'Add Valid ID'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="field full">
+                <label>Bio</label>
+                <textarea value={profile.bio} onChange={(e) => setProfile({ ...profile, bio: e.target.value })} />
+              </div>
+            </>
+          )}
         </div>
 
         <div className="toolbar" style={{ marginTop: 14 }}>
@@ -4468,23 +4767,24 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       onClose={() => setIsTicketModalOpen(false)}
       size="wide"
     >
-      <form onSubmit={handleTicketSubmit}>
+      <form className={isCustomer ? 'support-ticket-form customer-ticket-form' : 'support-ticket-form'} onSubmit={handleTicketSubmit}>
         <div className="form-grid">
-          <div className="field">
-            <label>{isCustomer ? 'Purchased Product' : 'Product'}</label>
-            <select
-              value={ticketForm.productId}
-              onChange={(e) => setTicketForm({ ...ticketForm, productId: e.target.value })}
-              required={isCustomer}
-            >
-              <option value="">{isCustomer ? 'Select purchased product' : 'General admin support'}</option>
-              {(isCustomer ? purchasedProductOptions : roleProducts).map((product) => (
-                <option key={product.productId} value={product.productId}>
-                  {product.title}
-                </option>
-              ))}
-            </select>
-          </div>
+          {!isCustomer && (
+            <div className="field">
+              <label>Product</label>
+              <select
+                value={ticketForm.productId}
+                onChange={(e) => setTicketForm({ ...ticketForm, productId: e.target.value })}
+              >
+                <option value="">General admin support</option>
+                {roleProducts.map((product) => (
+                  <option key={product.productId} value={product.productId}>
+                    {product.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="field">
             <label>Order</label>
@@ -4498,27 +4798,30 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                   productId: selectedOrder?.productId ? String(selectedOrder.productId) : ticketForm.productId,
                 });
               }}
+              required={isCustomer}
             >
-              <option value="">No order selected</option>
+              <option value="">{isCustomer ? 'Select order' : 'No order selected'}</option>
               {roleOrders.map((order) => (
                 <option key={order.orderId} value={order.orderId}>
-                  {order.referenceNumber}
+                  {order.referenceNumber} {order.productTitle ? `/ ${order.productTitle}` : ''}
                 </option>
               ))}
             </select>
           </div>
 
-          <div className="field">
-            <label>Priority</label>
-            <select
-              value={ticketForm.priority}
-              onChange={(e) => setTicketForm({ ...ticketForm, priority: e.target.value })}
-            >
-              <option value="Low">Low</option>
-              <option value="Normal">Normal</option>
-              <option value="High">High</option>
-            </select>
-          </div>
+          {!isCustomer && (
+            <div className="field">
+              <label>Priority</label>
+              <select
+                value={ticketForm.priority}
+                onChange={(e) => setTicketForm({ ...ticketForm, priority: e.target.value })}
+              >
+                <option value="Low">Low</option>
+                <option value="Normal">Normal</option>
+                <option value="High">High</option>
+              </select>
+            </div>
+          )}
 
           <div className="field">
             <label>Subject</label>
@@ -4619,6 +4922,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
             {['Approved', 'Rejected'].map((status) => (
               <button
                 className={`button icon-action-button ${status === 'Approved' ? 'action-approve' : 'action-reject'}`}
+                disabled={['Approved', 'Rejected'].includes(activeTicket?.status) && activeTicket?.status !== status}
                 key={status}
                 type="button"
                 onClick={async () => {
@@ -4723,7 +5027,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
 
   const renderSupport = () => (
     <div className="module-stack">
-      <div className={isAdmin ? 'module-stack' : 'grid-2'}>
+      <div className={isAdmin || isSeller ? 'module-stack' : 'grid-2'}>
         {!isAdmin && (
           <div className="panel support-command-panel">
             <div>
@@ -4738,6 +5042,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
           </div>
         )}
 
+        {!isSeller && (
         <div className="panel">
           <h2>{isAdmin ? 'Seller Support Requests' : isSeller ? 'Seller Support' : 'My Seller Tickets'}</h2>
 
@@ -4757,6 +5062,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
             {roleTickets.length === 0 && <div className="empty-state">No tickets submitted yet.</div>}
           </div>
         </div>
+        )}
       </div>
 
       <div className="panel">
@@ -4781,6 +5087,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                 const requesterRole = getTicketRequesterRole(ticket);
                 const canSellerManage = isSeller && requesterRole === 'Customer';
                 const canAdminReview = isAdmin && requesterRole === 'Seller';
+                const isFinalSupportStatus = ['Approved', 'Rejected'].includes(ticket.status || ticket.Status);
 
                 return (
                 <tr key={getTicketId(ticket)}>
@@ -4817,6 +5124,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                       <>
                         <button
                           className="button icon-only-button action-approve"
+                          disabled={isFinalSupportStatus && (ticket.status || ticket.Status) !== 'Approved'}
                           type="button"
                           aria-label={`Approve ${ticket.subject}`}
                           title="Approve"
@@ -4826,6 +5134,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                         </button>
                         <button
                           className="button icon-only-button action-reject"
+                          disabled={isFinalSupportStatus && (ticket.status || ticket.Status) !== 'Rejected'}
                           type="button"
                           aria-label={`Reject ${ticket.subject}`}
                           title="Reject"
@@ -4862,14 +5171,14 @@ export default function Dashboard({ user, userSessionName, activeModule: control
         'Category',
         'View category counts across software and tech, business and finance, 3D assets, design assets, courses, productivity, and entertainment.',
       ],
-      payments: ['Payment', 'Audit sandbox GCash/Card payments and generated access tokens.'],
+      payments: ['Payout Requests', 'Review seller payout requests and final payout decisions.'],
       reports: ['Reports and Analytics', 'Review sales analytics, category performance, top products, and support load.'],
       users: ['User Directory', 'View registered admins, sellers, and customers without changing their account records.'],
       profile: ['Account Settings', 'View account details and payout settings.'],
       support: ['Seller Support', 'Review seller requests sent to admin.'],
     },
     Seller: {
-      overview: [`Hello! ${displayName}`, ''],
+      overview: [`Hello! ${displayName}`, 'Welcome back to your seller dashboard.'],
       products: ['', ''],
       payments: ['Payout Activity', 'Monitor buyer orders, delivery access, and checkout references.'],
       reports: ['', ''],
@@ -4880,7 +5189,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       overview: [`Hi, ${firstName}`, 'Browse the marketplace, see your purchases, and keep support close.'],
       products: ['Marketplace', 'Discover digital products, review versions, and choose what to buy.'],
       payments: ['My Library', 'View purchase references and delivery records.'],
-      profile: ['Customer Profile', 'Maintain your buyer information and account protection settings.'],
+      profile: ['Account Settings', 'Maintain your buyer information and account protection settings.'],
       support: ['Seller Support', 'Ask the seller for help on products you bought.'],
     },
   };
@@ -4983,6 +5292,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       {isValidIdModalOpen && renderValidIdModal()}
       {isChangePasswordModalOpen && renderChangePasswordModal()}
       {activeValidIdDetails && renderValidIdDetailsModal()}
+      {activeSubscriptionAccount && renderAdminSubscriptionModal()}
       {isLibraryFilterOpen && renderLibraryFilterModal()}
       {(isSeller || isCustomer) && renderChatboxMessenger()}
     </div>

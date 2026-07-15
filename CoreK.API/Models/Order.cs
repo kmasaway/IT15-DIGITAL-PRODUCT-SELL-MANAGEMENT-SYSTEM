@@ -34,6 +34,9 @@ namespace CoreK.API.Models
         [StringLength(120)]
         public string? DownloadToken { get; set; }
 
+        [Range(1, int.MaxValue)]
+        public int Quantity { get; set; } = 1;
+
         [Required]
         [Column(TypeName = "decimal(10,2)")]
         public decimal TotalAmount { get; set; }

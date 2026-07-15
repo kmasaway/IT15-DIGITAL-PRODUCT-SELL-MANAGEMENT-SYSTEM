@@ -43,7 +43,7 @@
 .dashboard-shell.role-customer.module-profile .dashboard-content {
   height: 100%;
   min-height: 0;
-  overflow-y: hidden;
+  overflow-y: auto;
   scrollbar-gutter: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -265,7 +265,7 @@
 .dashboard-shell.role-customer.module-payments .dashboard-content,
 .dashboard-shell.role-customer.module-support .dashboard-content,
 .dashboard-shell.role-customer.module-profile .dashboard-content {
-  overflow-y: hidden;
+  overflow-y: auto;
   scrollbar-gutter: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -723,6 +723,12 @@
 .product-listing-form .field input,
 .product-listing-form .field textarea,
 .product-listing-form .field select {
+  background: transparent;
+}
+
+.support-ticket-form .field input,
+.support-ticket-form .field textarea,
+.support-ticket-form .field select {
   background: transparent;
 }
 
@@ -1764,7 +1770,8 @@
   text-transform: uppercase;
 }
 
-.inline-payment-select select {
+.inline-payment-select select,
+.inline-payment-select input {
   min-height: 38px;
   border: 1px solid var(--core-mint);
   border-radius: 10px;
@@ -1775,6 +1782,11 @@
   font-size: 0.88rem;
   font-weight: 800;
   text-transform: none;
+}
+
+.inline-payment-select input {
+  width: 72px;
+  text-align: right;
 }
 
 .product-view-stack {
@@ -1797,27 +1809,29 @@
 
 .dashboard-modal.product-details .product-view-details,
 .dashboard-modal.product-details .product-view-description {
-  text-align: right;
+  text-align: left;
 }
 
 .dashboard-modal.product-details .product-view-row {
   grid-template-columns: minmax(86px, 0.7fr) minmax(0, 1fr);
 }
 
-.dashboard-modal.product-details .product-view-row > span,
-.dashboard-modal.product-details .product-view-row > strong {
-  text-align: right;
+.dashboard-modal.product-details .product-view-row > span {
+  text-align: left;
 }
 
 .dashboard-modal.product-details .product-view-row > strong,
 .dashboard-modal.product-details .product-view-row .status-text {
-  text-align: left;
+  text-align: right;
   justify-self: stretch;
 }
 
 .dashboard-modal.product-details .product-view-description,
-.dashboard-modal.product-details .product-view-description p,
 .dashboard-modal.product-details .product-view-description strong {
+  text-align: left;
+}
+
+.dashboard-modal.product-details .product-view-description p {
   text-align: right;
 }
 
@@ -2393,7 +2407,7 @@
 
 .sales-trend-months {
   display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--sales-point-count, 1), minmax(64px, 1fr));
   gap: 8px;
   align-items: center;
   padding: 0 0 10px;
@@ -2408,7 +2422,7 @@
   position: relative;
   min-height: 230px;
   display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--sales-point-count, 1), minmax(64px, 1fr));
   align-items: end;
   gap: 8px;
   padding-top: 34px;
@@ -2645,12 +2659,18 @@
 }
 
 .seller-account-settings {
-  max-width: 980px;
+  width: 100%;
+  max-width: none;
 }
 
 .subscription-settings-panel,
 .account-security-panel {
   min-width: 0;
+}
+
+.account-segmented-shell > .panel {
+  width: 100%;
+  overflow: visible;
 }
 
 .subscription-summary-grid {
@@ -2684,6 +2704,20 @@
   font-weight: 900;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subscription-pill {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  border: 1px solid var(--core-border);
+  border-radius: 999px;
+  background: #f4faf7;
+  color: var(--core-dark);
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  font-weight: 900;
   white-space: nowrap;
 }
 
@@ -2804,6 +2838,16 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.mini-row.archived-row {
+  opacity: 0.62;
+  background: #f2f4f3;
+}
+
+.mini-row.archived-row strong,
+.mini-row.archived-row span {
+  color: #6f7c77;
 }
 
 .valid-id-detail-preview span {
@@ -3381,7 +3425,7 @@ input[type='number'] {
 .dashboard-shell.role-customer.module-profile .dashboard-content {
   height: 100%;
   min-height: 0;
-  overflow-y: hidden;
+  overflow-y: auto;
   scrollbar-gutter: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;

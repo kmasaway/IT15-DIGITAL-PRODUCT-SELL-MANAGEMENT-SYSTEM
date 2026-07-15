@@ -23,9 +23,15 @@ namespace CoreK.API.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> GetCategories()
         {
-            var categories = await _context.Categories
-                .Where(c => !c.IsArchived)
-                .OrderBy(c => c.CategoryName)
+            var query = _context.Categories.AsQueryable();
+            if (!IsAdmin)
+            {
+                query = query.Where(c => !c.IsArchived);
+            }
+
+            var categories = await query
+                .OrderBy(c => c.IsArchived)
+                .ThenBy(c => c.CategoryName)
                 .Select(c => new
                 {
                     c.CategoryId,

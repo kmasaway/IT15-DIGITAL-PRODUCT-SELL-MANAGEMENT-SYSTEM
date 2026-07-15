@@ -32,7 +32,7 @@ namespace CoreK.API.Controllers
 
             if (!IsAdmin)
             {
-                query = query.Where(p => p.IsActive);
+                query = query.Where(p => p.IsActive && p.Quantity > 0);
             }
 
             if (categoryId.HasValue)
@@ -56,6 +56,7 @@ namespace CoreK.API.Controllers
                     p.Title,
                     p.Description,
                     p.Price,
+                    p.Quantity,
                     p.IsActive,
                     p.ApprovalStatus,
                     p.ReviewRemarks,
@@ -102,6 +103,7 @@ namespace CoreK.API.Controllers
                     p.Title,
                     p.Description,
                     p.Price,
+                    p.Quantity,
                     p.IsActive,
                     p.ApprovalStatus,
                     p.ReviewRemarks,
@@ -157,6 +159,7 @@ namespace CoreK.API.Controllers
                 product.Title,
                 product.Description,
                 product.Price,
+                product.Quantity,
                 product.IsActive,
                 product.ApprovalStatus,
                 product.ReviewRemarks,
@@ -215,6 +218,7 @@ namespace CoreK.API.Controllers
                     p.Title,
                     p.Description,
                     p.Price,
+                    p.Quantity,
                     p.IsActive,
                     p.ApprovalStatus,
                     p.ReviewRemarks,
@@ -251,6 +255,7 @@ namespace CoreK.API.Controllers
                     p.Title,
                     p.Description,
                     p.Price,
+                    p.Quantity,
                     p.IsActive,
                     p.ApprovalStatus,
                     p.ReviewRemarks,
@@ -324,6 +329,7 @@ namespace CoreK.API.Controllers
                     Title = title,
                     Description = description,
                     Price = productDto.Price,
+                    Quantity = productDto.Quantity,
                     IsActive = IsAdmin,
                     ApprovalStatus = IsAdmin ? "Approved" : "Pending Review",
                     ReviewedAt = IsAdmin ? DateTime.UtcNow : null,
@@ -356,6 +362,7 @@ namespace CoreK.API.Controllers
                         product.Title,
                         product.Description,
                         product.Price,
+                        product.Quantity,
                         product.IsActive,
                         product.ApprovalStatus,
                         product.ReviewRemarks,
@@ -435,6 +442,7 @@ namespace CoreK.API.Controllers
             product.Title = title;
             product.Description = description;
             product.Price = productDto.Price;
+            product.Quantity = productDto.Quantity;
             if (IsAdmin)
             {
                 product.ApprovalStatus = allowedStatuses.First(status =>
@@ -518,9 +526,23 @@ namespace CoreK.API.Controllers
                 };
 
                 _context.ProductVersions.Add(newVersion);
+                if (!IsAdmin)
+                {
+                    product.IsActive = false;
+                    product.ApprovalStatus = "Pending Review";
+                    product.ReviewRemarks = null;
+                    product.ReviewedAt = null;
+                }
                 await _context.SaveChangesAsync();
 
-                return Ok(new { message = $"Version {versionNumber} pushed successfully!" });
+                return Ok(new
+                {
+                    message = IsAdmin
+                        ? $"Version {versionNumber} pushed successfully!"
+                        : $"Version {versionNumber} submitted and waiting for admin validation.",
+                    status = product.ApprovalStatus,
+                    productId = product.ProductId
+                });
             }
             catch (Exception ex) when (DatabaseErrorHelper.IsMissingStorage(ex))
             {

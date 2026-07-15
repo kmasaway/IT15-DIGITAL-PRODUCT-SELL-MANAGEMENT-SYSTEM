@@ -27,6 +27,9 @@ namespace CoreK.API.Models
         [Column(TypeName = "decimal(10,2)")]
         public decimal Price { get; set; }
 
+        [Range(0, int.MaxValue)]
+        public int Quantity { get; set; } = 100;
+
         public bool IsActive { get; set; } = true;
 
         [Required]

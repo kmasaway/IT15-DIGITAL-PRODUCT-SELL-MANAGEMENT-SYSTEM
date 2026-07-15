@@ -7,6 +7,9 @@ namespace CoreK.API.DTOs
         [Required]
         public int ProductId { get; set; }
 
+        [Range(1, 1000, ErrorMessage = "Quantity must be at least one.")]
+        public int Quantity { get; set; } = 1;
+
         public int CustomerId { get; set; } = 1;
 
         [StringLength(150)]
