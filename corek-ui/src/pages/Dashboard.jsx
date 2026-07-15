@@ -696,6 +696,14 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     return orders.filter((order) => sellerProductIds.has(Number(order.productId)));
   }, [isSeller, orders, roleProducts]);
 
+  const supportOrderOptions = useMemo(() => {
+    if (!isCustomer) return roleOrders;
+
+    return roleOrders.filter((order) =>
+      String(order.status || order.Status || '').toLowerCase() === 'completed'
+    );
+  }, [isCustomer, roleOrders]);
+
   const dateFilteredRoleOrders = useMemo(() => {
     if (!isSeller) return roleOrders;
     return roleOrders.filter((order) => isWithinDateRange(order.createdAt, sellerDateFilters));
@@ -2386,7 +2394,12 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     event.preventDefault();
 
     if (isCustomer && !ticketForm.orderId) {
-      showError('Select an order for this support ticket.');
+      showError('Select a completed purchased order for this support ticket.');
+      return;
+    }
+
+    if (isCustomer && !supportOrderOptions.some((order) => String(order.orderId) === String(ticketForm.orderId))) {
+      showError('Support tickets can only be created from completed purchases.');
       return;
     }
 
@@ -4850,8 +4863,8 @@ export default function Dashboard({ user, userSessionName, activeModule: control
 
   const renderSupportTicketModal = () => (
     <DashboardModal
-      title={isSeller ? 'Seller Support' : 'Submit Ticket'}
-      subtitle={isSeller ? 'Send an account, payout, or listing concern to admin.' : 'Send a product or order concern to the seller.'}
+      title={isSeller ? 'Seller Support' : 'Customer Support Ticket'}
+      subtitle={isSeller ? 'Send an account, payout, or listing concern to admin.' : 'Send a purchased product concern to the seller.'}
       onClose={() => setIsTicketModalOpen(false)}
       size="wide"
     >
@@ -4879,7 +4892,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
             <select
               value={ticketForm.orderId}
               onChange={(e) => {
-                const selectedOrder = roleOrders.find((order) => String(order.orderId) === e.target.value);
+                const selectedOrder = supportOrderOptions.find((order) => String(order.orderId) === e.target.value);
                 setTicketForm({
                   ...ticketForm,
                   orderId: e.target.value,
@@ -4888,8 +4901,8 @@ export default function Dashboard({ user, userSessionName, activeModule: control
               }}
               required={isCustomer}
             >
-              <option value="">{isCustomer ? 'Select order' : 'No order selected'}</option>
-              {roleOrders.map((order) => (
+              <option value="">{isCustomer ? 'Select completed order' : 'No order selected'}</option>
+              {supportOrderOptions.map((order) => (
                 <option key={order.orderId} value={order.orderId}>
                   {order.referenceNumber} {order.productTitle ? `/ ${order.productTitle}` : ''}
                 </option>
@@ -5119,8 +5132,8 @@ export default function Dashboard({ user, userSessionName, activeModule: control
         {!isAdmin && (
           <div className="panel support-command-panel">
             <div>
-              <h2>{isSeller ? 'Seller Support' : 'Support Center'}</h2>
-              <p>{isSeller ? 'Send account, payout, or listing concerns to admin.' : 'Create a ticket for a product you purchased.'}</p>
+              <h2>{isSeller ? 'Seller Support' : 'Customer Support Center'}</h2>
+              <p>{isSeller ? 'Send account, payout, or listing concerns to admin.' : 'Create a ticket for a completed purchase and send it to the seller.'}</p>
             </div>
 
             <button className="button" type="button" onClick={() => setIsTicketModalOpen(true)}>
@@ -5132,7 +5145,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
 
         {!isSeller && (
         <div className="panel">
-          <h2>{isAdmin ? 'Seller Support Requests' : isSeller ? 'Seller Support' : 'My Seller Tickets'}</h2>
+          <h2>{isAdmin ? 'Seller Support Requests' : 'My Support Tickets'}</h2>
 
           <div className="mini-list">
             {roleTickets.slice(0, 5).map((ticket) => (
@@ -5278,7 +5291,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       products: ['Marketplace', 'Discover digital products, review versions, and choose what to buy.'],
       payments: ['My Library', 'View purchase references and delivery records.'],
       profile: ['Account Settings', 'Maintain your buyer information and account protection settings.'],
-      support: ['Seller Support', 'Ask the seller for help on products you bought.'],
+      support: ['Customer Support', 'Send support tickets to sellers for products you bought.'],
     },
   };
 
