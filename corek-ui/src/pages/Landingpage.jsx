@@ -140,26 +140,6 @@ export default function LandingPage({ onOpenAuthModal }) {
         </div>
       </div>
 
-      <section style={styles.briefDescriptionCard} aria-label="Landing page brief description">
-        <div>
-          <span style={styles.briefEyebrow}>Brief Description</span>
-          <h2 style={styles.briefDescriptionTitle}>CoreK Digital Product Sell and Management System</h2>
-        </div>
-
-        <p style={styles.briefDescriptionText}>
-          The landing page introduces CoreK as a digital marketplace where customers can discover
-          downloadable products and sellers can create, manage, and distribute digital assets. It
-          highlights account registration, product categories, secure delivery, and the main value
-          of using one platform for selling and buying digital products.
-        </p>
-
-        <div style={styles.briefDescriptionList}>
-          <span style={styles.briefDescriptionListSpan}>Register as Customer or Seller</span>
-          <span style={styles.briefDescriptionListSpan}>Browse digital product categories</span>
-          <span style={styles.briefDescriptionListSpan}>Preview marketplace features</span>
-        </div>
-      </section>
-
       {/* --- FEATURE MODULE --- */}
       <div style={styles.sectionDivider}>
         <h2 style={styles.sectionHeading}>Engineered for Digital Sellers</h2>
@@ -626,56 +606,6 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     gap: '8px',
-  },
-  briefDescriptionCard: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))',
-    gap: '2rem',
-    alignItems: 'start',
-    backgroundColor: '#ffffff',
-    border: '1px solid #bfe0d3',
-    borderRadius: '20px',
-    padding: '2rem',
-    margin: '-9rem 0 5rem',
-    boxShadow: '0 14px 36px rgba(0,44,28,0.04)',
-  },
-  briefEyebrow: {
-    display: 'inline-flex',
-    marginBottom: '0.75rem',
-    color: '#00bfa5',
-    fontSize: '0.78rem',
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
-  },
-  briefDescriptionTitle: {
-    margin: 0,
-    color: '#0f291e',
-    fontSize: '1.55rem',
-    fontWeight: '800',
-    lineHeight: 1.25,
-  },
-  briefDescriptionText: {
-    margin: 0,
-    color: '#4a6b5d',
-    fontSize: '1rem',
-    lineHeight: 1.7,
-    textAlign: 'justify',
-  },
-  briefDescriptionList: {
-    gridColumn: '1 / -1',
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '0.75rem',
-  },
-  briefDescriptionListSpan: {
-    border: '1px solid #d8e8e1',
-    borderRadius: '999px',
-    backgroundColor: '#f4faf7',
-    color: '#0f291e',
-    padding: '0.55rem 0.85rem',
-    fontSize: '0.82rem',
-    fontWeight: '700',
   },
   sectionDivider: {
     width: '100%',

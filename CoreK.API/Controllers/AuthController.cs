@@ -90,9 +90,7 @@ namespace CoreK.API.Controllers
                 Console.WriteLine(">>> EMAIL VERIFICATION SKIPPED: SMTP settings are not configured.");
                 return Ok(new
                 {
-                    message = safeRole.Equals("Seller", StringComparison.OrdinalIgnoreCase)
-                        ? "Registration successful! Seller accounts start on the Starter subscription. Email verification is disabled for this local build. You can now sign in."
-                        : "Registration successful! Email verification is disabled for this local build. You can now sign in.",
+                    message = "Account created successfully. You can now sign in.",
                     requiresVerification = false,
                     email = newUser.Email
                 });
@@ -104,9 +102,7 @@ namespace CoreK.API.Controllers
                 Console.WriteLine(">>> SUCCESS: Email verification code sent via SMTP.");
                 return Ok(new
                 {
-                    message = safeRole.Equals("Seller", StringComparison.OrdinalIgnoreCase)
-                        ? "Registration successful! Seller accounts start on the Starter subscription. Enter the 6-digit code sent to your email."
-                        : "Registration successful! Enter the 6-digit code sent to your email.",
+                    message = "Account created successfully. Enter the 6-digit code sent to your email.",
                     requiresVerification = true,
                     email = newUser.Email
                 });
@@ -121,9 +117,7 @@ namespace CoreK.API.Controllers
 
                 return Ok(new
                 {
-                    message = safeRole.Equals("Seller", StringComparison.OrdinalIgnoreCase)
-                        ? "Registration successful! Seller accounts start on the Starter subscription. Verification email could not be sent, so this local account was verified automatically. You can now sign in."
-                        : "Registration successful! Verification email could not be sent, so this local account was verified automatically. You can now sign in.",
+                    message = "Account created successfully. You can now sign in.",
                     requiresVerification = false,
                     email = newUser.Email
                 });
