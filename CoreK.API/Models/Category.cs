@@ -13,5 +13,7 @@ namespace CoreK.API.Models
 
         [StringLength(255)]
         public string? Description { get; set; }
+
+        public bool IsArchived { get; set; } = false;
     }
 }

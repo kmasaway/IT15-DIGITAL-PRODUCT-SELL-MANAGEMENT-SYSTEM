@@ -38,6 +38,13 @@ namespace CoreK.API.Models
         [StringLength(50)]
         public string Priority { get; set; } = "Normal";
 
+        [Required]
+        [StringLength(50)]
+        public string RequesterRole { get; set; } = "Customer";
+
+        [StringLength(500)]
+        public string? ReviewRemarks { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

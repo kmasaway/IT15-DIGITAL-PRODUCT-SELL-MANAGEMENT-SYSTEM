@@ -28,6 +28,16 @@ namespace CoreK.API.Models
         public decimal Price { get; set; }
 
         public bool IsActive { get; set; } = true;
+
+        [Required]
+        [StringLength(50)]
+        public string ApprovalStatus { get; set; } = "Approved";
+
+        [StringLength(500)]
+        public string? ReviewRemarks { get; set; }
+
+        public DateTime? ReviewedAt { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         // Navigation Properties

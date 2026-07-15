@@ -40,6 +40,9 @@ namespace CoreK.API.Models
 
         public DateTime? ReviewedAt { get; set; }
 
+        [StringLength(500)]
+        public string? ReviewRemarks { get; set; }
+
         [ForeignKey("SellerId")]
         public User? Seller { get; set; }
     }

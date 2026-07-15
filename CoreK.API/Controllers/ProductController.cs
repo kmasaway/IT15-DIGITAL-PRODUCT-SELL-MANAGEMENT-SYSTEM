@@ -57,6 +57,9 @@ namespace CoreK.API.Controllers
                     p.Description,
                     p.Price,
                     p.IsActive,
+                    p.ApprovalStatus,
+                    p.ReviewRemarks,
+                    p.ReviewedAt,
                     p.CreatedAt,
                     Category = p.Category == null ? "Digital Product" : p.Category.CategoryName,
                     CategoryName = p.Category == null ? "Digital Product" : p.Category.CategoryName,
@@ -96,6 +99,9 @@ namespace CoreK.API.Controllers
                     p.Description,
                     p.Price,
                     p.IsActive,
+                    p.ApprovalStatus,
+                    p.ReviewRemarks,
+                    p.ReviewedAt,
                     p.CreatedAt,
                     SellerName = seller?.FullName,
                     SellerPhoneNumber = seller?.PhoneNumber,
@@ -148,6 +154,9 @@ namespace CoreK.API.Controllers
                 product.Description,
                 product.Price,
                 product.IsActive,
+                product.ApprovalStatus,
+                product.ReviewRemarks,
+                product.ReviewedAt,
                 product.CreatedAt,
                 Category = product.Category?.CategoryName ?? "Digital Product",
                 CategoryName = product.Category?.CategoryName ?? "Digital Product",
@@ -195,6 +204,9 @@ namespace CoreK.API.Controllers
                     p.Description,
                     p.Price,
                     p.IsActive,
+                    p.ApprovalStatus,
+                    p.ReviewRemarks,
+                    p.ReviewedAt,
                     p.CreatedAt,
                     Category = p.Category == null ? "Digital Product" : p.Category.CategoryName,
                     VersionCount = p.Versions.Count,
@@ -224,6 +236,9 @@ namespace CoreK.API.Controllers
                     p.Description,
                     p.Price,
                     p.IsActive,
+                    p.ApprovalStatus,
+                    p.ReviewRemarks,
+                    p.ReviewedAt,
                     p.CreatedAt,
                     SellerName = seller?.FullName,
                     SellerPhoneNumber = seller?.PhoneNumber,
@@ -250,7 +265,7 @@ namespace CoreK.API.Controllers
                 return BadRequest("A digital file asset must be provided.");
 
             var categoryName = await _context.Categories
-                .Where(c => c.CategoryId == productDto.CategoryId)
+                .Where(c => c.CategoryId == productDto.CategoryId && !c.IsArchived)
                 .Select(c => c.CategoryName)
                 .FirstOrDefaultAsync();
             if (categoryName == null) return BadRequest("Invalid category specified.");
@@ -294,6 +309,8 @@ namespace CoreK.API.Controllers
                     Description = description,
                     Price = productDto.Price,
                     IsActive = IsAdmin,
+                    ApprovalStatus = IsAdmin ? "Approved" : "Pending Review",
+                    ReviewedAt = IsAdmin ? DateTime.UtcNow : null,
                     Versions =
                     [
                         new ProductVersion
@@ -314,7 +331,7 @@ namespace CoreK.API.Controllers
                         ? "Product and initial version uploaded successfully!"
                         : "Product submitted and waiting for admin validation.",
                     productId = product.ProductId,
-                    status = product.IsActive ? "Approved" : "Pending Review",
+                    status = product.ApprovalStatus,
                     product = new
                     {
                         product.ProductId,
@@ -324,6 +341,9 @@ namespace CoreK.API.Controllers
                         product.Description,
                         product.Price,
                         product.IsActive,
+                        product.ApprovalStatus,
+                        product.ReviewRemarks,
+                        product.ReviewedAt,
                         product.CreatedAt,
                         Category = categoryName,
                         CategoryName = categoryName,
@@ -359,7 +379,7 @@ namespace CoreK.API.Controllers
             if (product == null) return NotFound("Product listing not found.");
             if (!IsAdmin && product.SellerId != CurrentUserId) return Forbid();
 
-            var categoryExists = await _context.Categories.AnyAsync(c => c.CategoryId == productDto.CategoryId);
+            var categoryExists = await _context.Categories.AnyAsync(c => c.CategoryId == productDto.CategoryId && !c.IsArchived);
             if (!categoryExists) return BadRequest("Invalid category specified.");
 
             var title = productDto.Title?.Trim() ?? string.Empty;
@@ -369,20 +389,65 @@ namespace CoreK.API.Controllers
                 return BadRequest("Product title and description are required.");
             }
 
+            var requestedStatus = productDto.ApprovalStatus?.Trim();
+            if (string.IsNullOrWhiteSpace(requestedStatus))
+            {
+                requestedStatus = productDto.IsActive ? "Approved" : "Pending Review";
+            }
+
+            var allowedStatuses = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "Pending Review",
+                "Approved",
+                "Rejected",
+                "Archived"
+            };
+
+            if (IsAdmin && !allowedStatuses.Contains(requestedStatus))
+            {
+                return BadRequest("Product status must be Pending Review, Approved, Rejected, or Archived.");
+            }
+
+            var reviewRemarks = productDto.ReviewRemarks?.Trim();
+            if (IsAdmin && requestedStatus.Equals("Rejected", StringComparison.OrdinalIgnoreCase)
+                && string.IsNullOrWhiteSpace(reviewRemarks))
+            {
+                return BadRequest("Rejection remarks are required.");
+            }
+
             product.CategoryId = productDto.CategoryId;
             product.Title = title;
             product.Description = description;
             product.Price = productDto.Price;
-            product.IsActive = IsAdmin ? productDto.IsActive : false;
+            if (IsAdmin)
+            {
+                product.ApprovalStatus = allowedStatuses.First(status =>
+                    status.Equals(requestedStatus, StringComparison.OrdinalIgnoreCase));
+                product.IsActive = product.ApprovalStatus == "Approved";
+                product.ReviewRemarks = product.ApprovalStatus == "Rejected" ? reviewRemarks : null;
+                product.ReviewedAt = product.ApprovalStatus == "Pending Review" ? null : DateTime.UtcNow;
+            }
+            else
+            {
+                product.IsActive = false;
+                product.ApprovalStatus = "Pending Review";
+                product.ReviewRemarks = null;
+                product.ReviewedAt = null;
+            }
 
             await _context.SaveChangesAsync();
 
             return Ok(new
             {
                 message = IsAdmin
-                    ? "Product listing updated successfully."
+                    ? product.ApprovalStatus == "Rejected"
+                        ? "Product listing rejected."
+                        : product.ApprovalStatus == "Approved"
+                            ? "Product listing approved."
+                            : "Product listing updated successfully."
                     : "Product listing updated and waiting for admin validation.",
-                status = product.IsActive ? "Approved" : "Pending Review"
+                status = product.ApprovalStatus,
+                remarks = product.ReviewRemarks
             });
         }
 
@@ -395,6 +460,8 @@ namespace CoreK.API.Controllers
             if (!IsAdmin && product.SellerId != CurrentUserId) return Forbid();
 
             product.IsActive = false;
+            product.ApprovalStatus = "Archived";
+            product.ReviewedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
             return Ok(new { message = "Product listing has been deactivated." });

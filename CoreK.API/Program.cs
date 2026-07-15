@@ -234,6 +234,18 @@ static void EnsureSellerAccountTables(AppDbContext db, ILogger logger)
             IF OBJECT_ID(N'[Users]', N'U') IS NOT NULL AND COL_LENGTH(N'Users', N'EmailVerificationToken') IS NULL
                 ALTER TABLE [Users] ADD [EmailVerificationToken] nvarchar(max) NULL;
 
+            IF OBJECT_ID(N'[Categories]', N'U') IS NOT NULL AND COL_LENGTH(N'Categories', N'IsArchived') IS NULL
+                ALTER TABLE [Categories] ADD [IsArchived] bit NOT NULL DEFAULT CAST(0 AS bit);
+
+            IF OBJECT_ID(N'[Products]', N'U') IS NOT NULL AND COL_LENGTH(N'Products', N'ApprovalStatus') IS NULL
+                ALTER TABLE [Products] ADD [ApprovalStatus] nvarchar(50) NOT NULL DEFAULT N'Approved';
+
+            IF OBJECT_ID(N'[Products]', N'U') IS NOT NULL AND COL_LENGTH(N'Products', N'ReviewRemarks') IS NULL
+                ALTER TABLE [Products] ADD [ReviewRemarks] nvarchar(500) NULL;
+
+            IF OBJECT_ID(N'[Products]', N'U') IS NOT NULL AND COL_LENGTH(N'Products', N'ReviewedAt') IS NULL
+                ALTER TABLE [Products] ADD [ReviewedAt] datetime2 NULL;
+
             IF OBJECT_ID(N'[Orders]', N'U') IS NOT NULL AND COL_LENGTH(N'Orders', N'CustomerName') IS NULL
                 ALTER TABLE [Orders] ADD [CustomerName] nvarchar(150) NOT NULL DEFAULT N'';
 
@@ -265,6 +277,8 @@ static void EnsureSellerAccountTables(AppDbContext db, ILogger logger)
                     [Message] nvarchar(max) NOT NULL,
                     [Status] nvarchar(50) NOT NULL,
                     [Priority] nvarchar(50) NOT NULL,
+                    [RequesterRole] nvarchar(50) NOT NULL DEFAULT N'Customer',
+                    [ReviewRemarks] nvarchar(500) NULL,
                     [CreatedAt] datetime2 NOT NULL,
                     [UpdatedAt] datetime2 NOT NULL,
                     CONSTRAINT [PK_SupportTickets] PRIMARY KEY ([SupportTicketId]),
@@ -321,6 +335,7 @@ static void EnsureSellerAccountTables(AppDbContext db, ILogger logger)
                     [Status] nvarchar(50) NOT NULL,
                     [RequestedAt] datetime2 NOT NULL,
                     [ReviewedAt] datetime2 NULL,
+                    [ReviewRemarks] nvarchar(500) NULL,
                     CONSTRAINT [PK_PayoutRequests] PRIMARY KEY ([PayoutRequestId]),
                     CONSTRAINT [FK_PayoutRequests_Users_SellerId] FOREIGN KEY ([SellerId]) REFERENCES [Users] ([UserId]) ON DELETE NO ACTION
                 );
@@ -342,6 +357,15 @@ static void EnsureSellerAccountTables(AppDbContext db, ILogger logger)
                     CONSTRAINT [FK_ChatMessages_Products_ProductId] FOREIGN KEY ([ProductId]) REFERENCES [Products] ([ProductId]) ON DELETE SET NULL
                 );
             END;
+
+            IF OBJECT_ID(N'[SupportTickets]', N'U') IS NOT NULL AND COL_LENGTH(N'SupportTickets', N'RequesterRole') IS NULL
+                ALTER TABLE [SupportTickets] ADD [RequesterRole] nvarchar(50) NOT NULL DEFAULT N'Customer';
+
+            IF OBJECT_ID(N'[SupportTickets]', N'U') IS NOT NULL AND COL_LENGTH(N'SupportTickets', N'ReviewRemarks') IS NULL
+                ALTER TABLE [SupportTickets] ADD [ReviewRemarks] nvarchar(500) NULL;
+
+            IF OBJECT_ID(N'[PayoutRequests]', N'U') IS NOT NULL AND COL_LENGTH(N'PayoutRequests', N'ReviewRemarks') IS NULL
+                ALTER TABLE [PayoutRequests] ADD [ReviewRemarks] nvarchar(500) NULL;
 
             IF OBJECT_ID(N'[SellerSubscriptions]', N'U') IS NOT NULL
                 AND NOT EXISTS (
@@ -526,7 +550,8 @@ static void SeedMarketplaceCategories(AppDbContext db)
             var category = new Category
             {
                 CategoryName = seed.CategoryName,
-                Description = seed.Description
+                Description = seed.Description,
+                IsArchived = false
             };
 
             db.Categories.Add(category);

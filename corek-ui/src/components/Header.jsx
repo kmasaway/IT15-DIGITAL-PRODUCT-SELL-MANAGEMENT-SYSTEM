@@ -112,15 +112,16 @@ const styles = {
   leftSection: { display: 'flex', alignItems: 'center', gap: '2.5rem', flex: 1, maxWidth: '800px' },
   brand: { display: 'flex', alignItems: 'center', cursor: 'pointer' },
   logo: {
-    border: '1px solid #bfe0d3',
-    borderRadius: '12px',
-    background: 'linear-gradient(135deg, #ffffff 0%, #eefbf7 100%)',
+    border: 'none',
+    borderRadius: 0,
+    background: 'transparent',
     color: '#0b241a',
-    fontSize: '1.25rem',
-    fontWeight: '900',
+    fontFamily: '"Trebuchet MS", "Segoe UI", system-ui, sans-serif',
+    fontSize: '1.8rem',
+    fontWeight: '950',
     letterSpacing: '0',
-    padding: '0.35rem 0.75rem',
-    boxShadow: '0 8px 20px rgba(15,41,30,0.08)'
+    padding: 0,
+    boxShadow: 'none'
   },
   searchForm: { flex: 1, display: 'flex', alignItems: 'center' },
   searchWrapper: { position: 'relative', width: '100%', display: 'flex', alignItems: 'center' },

@@ -36,5 +36,8 @@ namespace CoreK.API.DTOs
         [Required]
         [StringLength(50)]
         public string Priority { get; set; } = "Normal";
+
+        [StringLength(500)]
+        public string? Remarks { get; set; }
     }
 }

@@ -371,8 +371,8 @@
 .field input:focus-visible,
 .field select:focus-visible,
 .field textarea:focus-visible {
-  outline: 3px solid rgba(0, 191, 166, 0.2);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(0, 191, 166, 0.18);
 }
 
 .panel,
@@ -948,6 +948,49 @@
   margin-left: 0;
 }
 
+.compact-view-button {
+  width: 34px;
+  height: 34px;
+}
+
+.icon-action-button {
+  min-height: 38px;
+}
+
+.action-approve,
+.role-admin .button.action-approve,
+.role-seller .button.action-approve,
+.role-customer .button.action-approve {
+  background: #008875;
+  color: #ffffff;
+  box-shadow: 0 10px 20px rgba(0, 136, 117, 0.18);
+}
+
+.action-reject,
+.role-admin .button.action-reject,
+.role-seller .button.action-reject,
+.role-customer .button.action-reject {
+  background: #a83a3a;
+  color: #ffffff;
+  box-shadow: 0 10px 20px rgba(168, 58, 58, 0.18);
+}
+
+.action-view,
+.role-admin .button.action-view,
+.role-seller .button.action-view,
+.role-customer .button.action-view {
+  background: #1e5f7a;
+  color: #ffffff;
+  box-shadow: 0 10px 20px rgba(30, 95, 122, 0.16);
+}
+
+.action-archive,
+.role-admin .button.action-archive {
+  background: #7d5b12;
+  color: #ffffff;
+  box-shadow: 0 10px 20px rgba(125, 91, 18, 0.16);
+}
+
 /* TABLES */
 .table-wrap {
   overflow-x: auto;
@@ -1456,6 +1499,24 @@
   background: rgba(0, 191, 165, 0.08);
 }
 
+.discover-buy-button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--core-dark);
+  color: #ffffff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 900;
+  padding: 0 12px;
+  box-shadow: 0 8px 18px rgba(15, 41, 30, 0.12);
+}
+
+.discover-buy-button:hover {
+  background: var(--core-teal);
+}
+
 .discover-pagination {
   display: flex;
   align-items: center;
@@ -1652,6 +1713,70 @@
   box-shadow: 0 6px 16px rgba(15, 41, 30, 0.08);
 }
 
+.segmented-table-panel,
+.account-segmented-shell {
+  min-width: 0;
+}
+
+.segmented-table-tabs,
+.account-settings-tabs {
+  margin-bottom: 16px;
+}
+
+.account-settings-tabs {
+  align-self: flex-start;
+  width: min(560px, 100%);
+}
+
+.seller-account-settings .account-settings-tabs {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.payout-history-filter {
+  margin-left: auto;
+}
+
+.reason-field {
+  margin-top: 14px;
+}
+
+.reason-field textarea {
+  width: 100%;
+  min-height: 126px;
+  border: 1px solid var(--core-mint);
+  border-radius: 12px;
+  background: var(--core-soft);
+  color: var(--core-dark);
+  padding: 11px;
+  font: inherit;
+  font-size: 0.92rem;
+  outline: none;
+  resize: vertical;
+}
+
+.inline-payment-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--core-muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.inline-payment-select select {
+  min-height: 38px;
+  border: 1px solid var(--core-mint);
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--core-dark);
+  padding: 0 10px;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 800;
+  text-transform: none;
+}
+
 .product-view-stack {
   display: flex;
   flex-direction: column;
@@ -1681,6 +1806,18 @@
 
 .dashboard-modal.product-details .product-view-row > span,
 .dashboard-modal.product-details .product-view-row > strong {
+  text-align: right;
+}
+
+.dashboard-modal.product-details .product-view-row > strong,
+.dashboard-modal.product-details .product-view-row .status-text {
+  text-align: left;
+  justify-self: stretch;
+}
+
+.dashboard-modal.product-details .product-view-description,
+.dashboard-modal.product-details .product-view-description p,
+.dashboard-modal.product-details .product-view-description strong {
   text-align: right;
 }
 
@@ -2306,7 +2443,7 @@
 }
 
 .sales-trend-column strong {
-  color: #2c4557;
+  color: var(--core-dark);
   font-size: 0.84rem;
   font-weight: 900;
   text-align: center;
@@ -2320,8 +2457,8 @@
   align-self: end;
   justify-self: center;
   border-radius: 12px 12px 8px 8px;
-  background: linear-gradient(180deg, #37a9f8 0%, #2295eb 100%);
-  box-shadow: 0 10px 18px rgba(34, 149, 235, 0.16);
+  background: linear-gradient(180deg, var(--core-teal) 0%, #008875 100%);
+  box-shadow: 0 10px 18px rgba(0, 191, 165, 0.18);
   transition: box-shadow 160ms ease, transform 160ms ease, width 160ms ease;
 }
 
@@ -2364,7 +2501,7 @@
 .sales-trend-column:focus-visible .sales-trend-bar,
 .sales-trend-column.active .sales-trend-bar {
   width: min(52px, 86%);
-  box-shadow: 0 14px 24px rgba(34, 149, 235, 0.24);
+  box-shadow: 0 14px 24px rgba(0, 191, 165, 0.26);
   transform: translateY(-2px);
 }
 
@@ -2376,8 +2513,7 @@
 }
 
 .sales-trend-column:focus-visible {
-  outline: 2px solid #2295eb;
-  outline-offset: 4px;
+  outline: none;
 }
 
 .sales-trend-inspector {
@@ -2392,7 +2528,7 @@
 }
 
 .sales-trend-inspector strong {
-  color: #2c4557;
+  color: var(--core-teal);
   font-size: 0.9rem;
   font-weight: 900;
 }
@@ -2583,6 +2719,50 @@
   font-size: 0.85rem;
   font-weight: 650;
   line-height: 1.45;
+}
+
+.security-standards-panel {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.security-standards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.security-standards-grid > div {
+  min-width: 0;
+  border: 1px solid var(--core-border);
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.security-standards-grid svg {
+  color: var(--core-teal);
+  margin-bottom: 10px;
+}
+
+.security-standards-grid strong,
+.security-standards-grid span {
+  display: block;
+}
+
+.security-standards-grid strong {
+  color: var(--core-dark);
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.security-standards-grid span {
+  margin-top: 5px;
+  color: var(--core-muted);
+  font-size: 0.8rem;
+  font-weight: 650;
+  line-height: 1.35;
 }
 
 .valid-id-form .field input,
@@ -2977,8 +3157,16 @@ input[type='number'] {
   .form-grid,
   .content-upload-grid,
   .product-listings-header,
-  .subscription-summary-grid {
+  .subscription-summary-grid,
+  .security-standards-grid {
     grid-template-columns: 1fr;
+  }
+
+  .seller-account-settings .account-settings-tabs,
+  .account-settings-tabs,
+  .segmented-table-tabs {
+    grid-template-columns: 1fr;
+    width: 100%;
   }
 
   .seller-date-filter,

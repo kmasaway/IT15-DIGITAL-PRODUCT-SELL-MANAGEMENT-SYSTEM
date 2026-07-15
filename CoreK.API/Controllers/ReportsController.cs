@@ -45,7 +45,7 @@ namespace CoreK.API.Controllers
 
                 var totalProducts = await productQuery.CountAsync();
                 var activeProducts = await productQuery.CountAsync(p => p.IsActive);
-                var totalCategories = await _context.Categories.CountAsync();
+                var totalCategories = await _context.Categories.CountAsync(c => !c.IsArchived);
                 var totalOrders = await orderQuery.CountAsync();
                 var completedOrders = await orderQuery.CountAsync(o => o.Status == "Completed");
                 var totalSales = await orderQuery

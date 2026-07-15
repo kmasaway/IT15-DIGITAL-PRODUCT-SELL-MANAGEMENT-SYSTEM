@@ -24,12 +24,14 @@ namespace CoreK.API.Controllers
         public async Task<IActionResult> GetCategories()
         {
             var categories = await _context.Categories
+                .Where(c => !c.IsArchived)
                 .OrderBy(c => c.CategoryName)
                 .Select(c => new
                 {
                     c.CategoryId,
                     c.CategoryName,
                     c.Description,
+                    c.IsArchived,
                     ProductCount = _context.Products.Count(p => p.CategoryId == c.CategoryId)
                 })
                 .ToListAsync();
@@ -47,13 +49,15 @@ namespace CoreK.API.Controllers
                 return BadRequest("Category name is required.");
             }
 
-            var exists = await _context.Categories.AnyAsync(c => c.CategoryName == categoryName);
+            var exists = await _context.Categories.AnyAsync(c =>
+                !c.IsArchived && c.CategoryName.ToLower() == categoryName.ToLower());
             if (exists) return BadRequest("Category name already exists.");
 
             var category = new Category
             {
                 CategoryName = categoryName,
-                Description = dto.Description?.Trim()
+                Description = dto.Description?.Trim(),
+                IsArchived = false
             };
 
             _context.Categories.Add(category);
@@ -76,11 +80,12 @@ namespace CoreK.API.Controllers
             }
 
             var exists = await _context.Categories.AnyAsync(c =>
-                c.CategoryId != categoryId && c.CategoryName == categoryName);
+                c.CategoryId != categoryId && !c.IsArchived && c.CategoryName.ToLower() == categoryName.ToLower());
             if (exists) return BadRequest("Category name already exists.");
 
             category.CategoryName = categoryName;
             category.Description = dto.Description?.Trim();
+            category.IsArchived = false;
             await _context.SaveChangesAsync();
 
             return Ok(category);
@@ -93,13 +98,10 @@ namespace CoreK.API.Controllers
             var category = await _context.Categories.FindAsync(categoryId);
             if (category == null) return NotFound("Category not found.");
 
-            var hasProducts = await _context.Products.AnyAsync(p => p.CategoryId == categoryId);
-            if (hasProducts) return BadRequest("Category is assigned to products and cannot be deleted.");
-
-            _context.Categories.Remove(category);
+            category.IsArchived = true;
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = "Category deleted successfully." });
+            return Ok(new { message = "Category archived successfully." });
         }
     }
 }

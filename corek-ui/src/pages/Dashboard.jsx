@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
+  Archive,
   BarChart3,
   CalendarDays,
   ChevronLeft,
@@ -23,7 +24,6 @@ import {
   Send,
   SlidersHorizontal,
   Tags,
-  Trash2,
   UploadCloud,
   UserCog,
   Users,
@@ -148,7 +148,21 @@ function getMarketplaceAccent(index) {
 }
 
 function getProductApprovalStatus(product) {
-  return product.isActive ? 'Approved' : 'Pending Review';
+  return product.approvalStatus
+    || product.ApprovalStatus
+    || (product.reviewRemarks || product.ReviewRemarks
+      ? 'Rejected'
+      : product.isActive
+        ? 'Approved'
+        : 'Pending Review');
+}
+
+function getProductReviewRemarks(product) {
+  return product.reviewRemarks || product.ReviewRemarks || '';
+}
+
+function formatFileCount(value) {
+  return `${Number(value || 0)} file(s)`;
 }
 
 function isWithinDateRange(value, filters) {
@@ -355,7 +369,7 @@ function getOrderSellerName(order) {
     || order.SellerName
     || order.sellerProfileName
     || order.SellerProfileName
-    || (order.sellerId || order.SellerId ? `Seller #${order.sellerId || order.SellerId}` : 'Seller User');
+    || 'CoreK Seller';
 }
 
 function getPayoutId(request) {
@@ -365,7 +379,7 @@ function getPayoutId(request) {
 function getPayoutSellerName(request) {
   return request.sellerName
     || request.SellerName
-    || (request.sellerId || request.SellerId ? `Seller #${request.sellerId || request.SellerId}` : 'Seller User');
+    || 'CoreK Seller';
 }
 
 function getPayoutStatus(request) {
@@ -374,6 +388,22 @@ function getPayoutStatus(request) {
 
 function getPayoutAmount(request) {
   return request.amount ?? request.Amount ?? 0;
+}
+
+function getPayoutRemarks(request) {
+  return request.reviewRemarks || request.ReviewRemarks || '';
+}
+
+function getTicketId(ticket) {
+  return ticket.supportTicketId || ticket.SupportTicketId;
+}
+
+function getTicketRequesterRole(ticket) {
+  return ticket.requesterRole || ticket.RequesterRole || 'Customer';
+}
+
+function getTicketRemarks(ticket) {
+  return ticket.reviewRemarks || ticket.ReviewRemarks || '';
 }
 
 function getPayoutDateRange(request) {
@@ -532,10 +562,16 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     start: '',
     end: '',
   });
+  const [payoutDateFilters, setPayoutDateFilters] = useState({
+    start: '',
+    end: '',
+  });
+  const [paymentsTableTab, setPaymentsTableTab] = useState('records');
+  const [profileSettingsTab, setProfileSettingsTab] = useState('account');
   const [sellerDashboardTab, setSellerDashboardTab] = useState('salesGraph');
   const [sellerAnalyticsTab, setSellerAnalyticsTab] = useState('topProducts');
   const [activeSalesTrendKey, setActiveSalesTrendKey] = useState('');
-  const [productReviewRemarks, setProductReviewRemarks] = useState({});
+  const [activeAdminSalesTrendKey, setActiveAdminSalesTrendKey] = useState('');
   const [payoutRequests, setPayoutRequests] = useState([]);
   const [isPayoutSubmitting, setIsPayoutSubmitting] = useState(false);
   const [isPayoutQrVisible, setIsPayoutQrVisible] = useState(false);
@@ -553,6 +589,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
   const [error, setError] = useState('');
   const [notificationModal, setNotificationModal] = useState(null);
   const [confirmationRequest, setConfirmationRequest] = useState(null);
+  const [reasonRequest, setReasonRequest] = useState(null);
   const [, setIsLoading] = useState(false);
   const productImagePreviewUrl = useMemo(
     () => (isImageFile(productForm.coverPhotoFile) ? URL.createObjectURL(productForm.coverPhotoFile) : ''),
@@ -591,11 +628,18 @@ export default function Dashboard({ user, userSessionName, activeModule: control
   }, [isSeller, roleOrders, sellerDateFilters]);
 
   const roleTickets = useMemo(() => {
+    if (isAdmin) {
+      return tickets.filter((ticket) => getTicketRequesterRole(ticket) === 'Seller');
+    }
+
     if (!isSeller) return tickets;
 
     const sellerProductIds = new Set(roleProducts.map((product) => Number(product.productId)));
-    return tickets.filter((ticket) => !ticket.productId || sellerProductIds.has(Number(ticket.productId)));
-  }, [isSeller, roleProducts, tickets]);
+    return tickets.filter((ticket) => (
+      Number(ticket.customerId || ticket.CustomerId) === Number(userId)
+      || (ticket.productId && sellerProductIds.has(Number(ticket.productId)))
+    ));
+  }, [isAdmin, isSeller, roleProducts, tickets, userId]);
 
   const completedRoleOrders = useMemo(
     () => dateFilteredRoleOrders.filter((order) => String(order.status || '').toLowerCase() === 'completed'),
@@ -657,6 +701,11 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     [payoutRequests]
   );
 
+  const filteredPayoutRequests = useMemo(
+    () => payoutRequests.filter((request) => isWithinDateRange(request.requestedAt || request.RequestedAt, payoutDateFilters)),
+    [payoutDateFilters, payoutRequests]
+  );
+
   const sellerSalesTrend = useMemo(() => {
     const monthlySales = SELLER_SALES_MONTHS.map((label, index) => ({
       key: String(index),
@@ -691,12 +740,66 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     [activeSalesTrendKey, sellerSalesTrend]
   );
 
+  const adminSalesTrend = useMemo(() => {
+    const monthlySales = SELLER_SALES_MONTHS.map((label, index) => ({
+      key: String(index),
+      label,
+      orders: 0,
+      percentage: 0,
+      sales: 0,
+    }));
+
+    orders
+      .filter((order) => String(order.status || '').toLowerCase() === 'completed')
+      .forEach((order) => {
+        const orderDate = new Date(order.createdAt);
+        if (Number.isNaN(orderDate.getTime())) return;
+
+        const month = orderDate.getMonth();
+        monthlySales[month].orders += 1;
+        monthlySales[month].sales += Number(order.totalAmount || 0);
+      });
+
+    const totalSales = monthlySales.reduce((sum, month) => sum + month.sales, 0);
+
+    return monthlySales.map((month) => ({
+      ...month,
+      percentage: totalSales > 0 ? (month.sales / totalSales) * 100 : 0,
+    }));
+  }, [orders]);
+
+  const activeAdminSalesTrendPoint = useMemo(
+    () => adminSalesTrend.find((point) => point.key === activeAdminSalesTrendKey)
+      || adminSalesTrend.find((point) => point.sales > 0)
+      || adminSalesTrend[0]
+      || null,
+    [activeAdminSalesTrendKey, adminSalesTrend]
+  );
+
   const filteredLibraryOrders = useMemo(() => {
     if (isSeller) return dateFilteredRoleOrders;
     if (!isCustomer) return roleOrders;
 
     return roleOrders.filter((order) => isWithinDateRange(order.createdAt, libraryFilters));
   }, [dateFilteredRoleOrders, isCustomer, isSeller, libraryFilters, roleOrders]);
+
+  const purchasedProductOptions = useMemo(() => {
+    const productById = new Map(products.map((product) => [Number(product.productId), product]));
+    const options = new Map();
+
+    roleOrders.forEach((order) => {
+      const productId = Number(order.productId);
+      if (!productId || options.has(productId)) return;
+
+      const product = productById.get(productId);
+      options.set(productId, {
+        productId,
+        title: order.productTitle || product?.title || 'Purchased Product',
+      });
+    });
+
+    return Array.from(options.values());
+  }, [products, roleOrders]);
 
   const marketplaceCategoryOptions = useMemo(() => {
     const categoryOptions = categories.length
@@ -994,13 +1097,37 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     })
   ), []);
 
+  const requestReason = useCallback((options) => (
+    new Promise((resolve) => {
+      setReasonRequest({
+        title: options.title || 'Add Remarks',
+        message: options.message || 'Add a reason before continuing.',
+        label: options.label || 'Remarks',
+        confirmLabel: options.confirmLabel || 'Continue',
+        tone: options.tone || 'default',
+        value: '',
+        resolve,
+      });
+    })
+  ), []);
+
   const closeConfirmation = (confirmed) => {
     confirmationRequest?.resolve(confirmed);
     setConfirmationRequest(null);
   };
 
+  const closeReason = (confirmed) => {
+    const value = reasonRequest?.value?.trim() || '';
+    reasonRequest?.resolve(confirmed ? value : null);
+    setReasonRequest(null);
+  };
+
   const resetSellerDateFilters = () => {
     setSellerDateFilters({ start: '', end: '' });
+  };
+
+  const resetPayoutDateFilters = () => {
+    setPayoutDateFilters({ start: '', end: '' });
   };
 
   const handleRequestPayout = async () => {
@@ -1042,6 +1169,22 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       return;
     }
 
+    let remarks = '';
+    if (status === 'Rejected') {
+      remarks = await requestReason({
+        title: 'Reject Payout',
+        message: 'Add the reason this payout request cannot be approved.',
+        label: 'Rejection reason',
+        confirmLabel: 'Continue',
+        tone: 'danger',
+      });
+      if (remarks === null) return;
+      if (!remarks) {
+        showError('Rejection remarks are required.');
+        return;
+      }
+    }
+
     const confirmed = await requestConfirmation({
       title: `${status} Payout?`,
       message: `Confirm that this payout request should be marked as ${status}.`,
@@ -1050,8 +1193,18 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     });
     if (!confirmed) return;
 
+    const finalConfirmed = await requestConfirmation({
+      title: `Final ${status} Confirmation`,
+      message: status === 'Rejected'
+        ? 'This will notify the seller that the payout request was rejected.'
+        : 'This will approve the payout request for admin processing.',
+      confirmLabel: status,
+      tone: status === 'Rejected' ? 'danger' : 'default',
+    });
+    if (!finalConfirmed) return;
+
     try {
-      const result = await api.updatePayoutStatus(payoutRequestId, { status });
+      const result = await api.updatePayoutStatus(payoutRequestId, { status, remarks });
       const savedPayout = result.payout || result;
 
       setPayoutRequests((currentRequests) => currentRequests.map((request) => (
@@ -1059,7 +1212,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
           ? { ...request, ...savedPayout }
           : request
       )));
-      showNotice(result.message || 'Payout status updated.');
+      showNotice(`Payout ${status}`, status === 'Rejected' ? remarks : result.message || 'Payout status updated.');
       await loadDashboard();
     } catch (err) {
       showError(err.message || 'Unable to update payout status.');
@@ -1097,15 +1250,33 @@ export default function Dashboard({ user, userSessionName, activeModule: control
   };
 
   const handleApproveProduct = async (product) => {
+    if (getProductApprovalStatus(product) === 'Approved') return;
+
+    const confirmed = await requestConfirmation({
+      title: 'Approve Product?',
+      message: 'Confirm that this listing is ready for marketplace buyers.',
+      confirmLabel: 'Approve',
+    });
+    if (!confirmed) return;
+
+    const finalConfirmed = await requestConfirmation({
+      title: 'Final Approval',
+      message: 'This product will become visible in the marketplace after approval.',
+      confirmLabel: 'Approve Product',
+    });
+    if (!finalConfirmed) return;
+
     try {
-      await api.updateProduct(product.productId, {
+      const result = await api.updateProduct(product.productId, {
         title: product.title,
         description: product.description,
         price: Number(product.price),
         categoryId: Number(product.categoryId),
         isActive: true,
+        approvalStatus: 'Approved',
+        reviewRemarks: '',
       });
-      showNotice('Product listing approved for the marketplace.');
+      showNotice('Product Approved', result.message || 'Product listing approved for the marketplace.');
       await loadDashboard();
     } catch (err) {
       showError(err.message);
@@ -1113,22 +1284,47 @@ export default function Dashboard({ user, userSessionName, activeModule: control
   };
 
   const handleRejectProduct = async (product) => {
-    const remarks = window.prompt('Add rejection remarks');
+    const remarks = await requestReason({
+      title: 'Reject Product',
+      message: 'Add the reason the seller should see before this product is rejected.',
+      label: 'Rejection reason',
+      confirmLabel: 'Continue',
+      tone: 'danger',
+    });
     if (remarks === null) return;
 
-    const trimmedRemarks = remarks.trim();
-    if (!trimmedRemarks) {
+    if (!remarks) {
       showError('Rejection remarks are required.');
       return;
     }
 
+    const confirmed = await requestConfirmation({
+      title: 'Reject Product?',
+      message: 'Confirm this rejection. The reason will be saved on the listing.',
+      confirmLabel: 'Reject',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+
+    const finalConfirmed = await requestConfirmation({
+      title: 'Final Rejection',
+      message: 'This product will stay hidden until the seller submits an update.',
+      confirmLabel: 'Reject Product',
+      tone: 'danger',
+    });
+    if (!finalConfirmed) return;
+
     try {
-      await api.deactivateProduct(product.productId);
-      setProductReviewRemarks((current) => ({
-        ...current,
-        [product.productId]: trimmedRemarks,
-      }));
-      showNotice('Product rejected with remarks.');
+      const result = await api.updateProduct(product.productId, {
+        title: product.title,
+        description: product.description,
+        price: Number(product.price),
+        categoryId: Number(product.categoryId),
+        isActive: false,
+        approvalStatus: 'Rejected',
+        reviewRemarks: remarks,
+      });
+      showNotice('Product Rejected', result.message || remarks);
       await loadDashboard();
     } catch (err) {
       showError(err.message);
@@ -1402,22 +1598,22 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     );
   };
 
-  const renderSellerSalesTrendChart = () => {
-    const hasSales = sellerSalesTrend.some((point) => point.sales > 0);
-    const maxPercentage = Math.max(...sellerSalesTrend.map((point) => point.percentage), 1);
+  const renderSalesTrendChart = (trendPoints, activeKey, setActiveKey, activePoint, emptyMessage) => {
+    const hasSales = trendPoints.some((point) => point.sales > 0);
+    const maxPercentage = Math.max(...trendPoints.map((point) => point.percentage), 1);
     const formatPercentage = (value) => {
       const roundedValue = Number(value || 0).toFixed(value >= 10 ? 1 : 1);
       return `${roundedValue.replace(/\.0$/, '')}%`;
     };
 
     if (!hasSales) {
-      return <div className="empty-state">No completed sales in this date range yet.</div>;
+      return <div className="empty-state">{emptyMessage}</div>;
     }
 
     return (
       <div className="sales-trend-chart" aria-label="Monthly sales graph from completed seller orders">
         <div className="sales-trend-months" aria-hidden="true">
-          {sellerSalesTrend.map((point) => <span key={point.key}>{point.label}</span>)}
+          {trendPoints.map((point) => <span key={point.key}>{point.label}</span>)}
         </div>
 
         <div className="sales-trend-plot" role="group" aria-label="Interactive monthly sales percentages">
@@ -1429,11 +1625,11 @@ export default function Dashboard({ user, userSessionName, activeModule: control
             <span />
           </div>
 
-          {sellerSalesTrend.map((point) => {
+          {trendPoints.map((point) => {
             const height = point.percentage > 0
               ? Math.max(6, Math.round((point.percentage / maxPercentage) * 100))
               : 0;
-            const isActive = activeSalesTrendKey === point.key;
+            const isActive = activeKey === point.key;
 
             return (
               <button
@@ -1441,9 +1637,9 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                 key={point.key}
                 type="button"
                 style={{ '--sales-bar-height': `${height}%` }}
-                onMouseEnter={() => setActiveSalesTrendKey(point.key)}
-                onFocus={() => setActiveSalesTrendKey(point.key)}
-                onClick={() => setActiveSalesTrendKey(point.key)}
+                onMouseEnter={() => setActiveKey(point.key)}
+                onFocus={() => setActiveKey(point.key)}
+                onClick={() => setActiveKey(point.key)}
                 aria-label={`${point.label}: ${formatPercentage(point.percentage)}, ${formatMoney(point.sales)}, ${point.orders} orders`}
               >
                 {point.percentage > 0 && <strong>{formatPercentage(point.percentage)}</strong>}
@@ -1458,16 +1654,32 @@ export default function Dashboard({ user, userSessionName, activeModule: control
           })}
         </div>
 
-        {activeSalesTrendPoint && (
+        {activePoint && (
           <div className="sales-trend-inspector" aria-live="polite">
-            <span>{activeSalesTrendPoint.label}</span>
-            <strong>{formatPercentage(activeSalesTrendPoint.percentage)}</strong>
-            <small>{formatMoney(activeSalesTrendPoint.sales)} / {activeSalesTrendPoint.orders} orders</small>
+            <span>{activePoint.label}</span>
+            <strong>{formatPercentage(activePoint.percentage)}</strong>
+            <small>{formatMoney(activePoint.sales)} / {activePoint.orders} orders</small>
           </div>
         )}
       </div>
     );
   };
+
+  const renderSellerSalesTrendChart = () => renderSalesTrendChart(
+    sellerSalesTrend,
+    activeSalesTrendKey,
+    setActiveSalesTrendKey,
+    activeSalesTrendPoint,
+    'No completed sales in this date range yet.'
+  );
+
+  const renderAdminSalesTrendChart = () => renderSalesTrendChart(
+    adminSalesTrend,
+    activeAdminSalesTrendKey,
+    setActiveAdminSalesTrendKey,
+    activeAdminSalesTrendPoint,
+    'No completed marketplace sales yet.'
+  );
 
   const renderSellerAnalyticsPanel = (options = {}) => (
     <section
@@ -1554,7 +1766,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
             <thead>
               <tr>
                 <th>Product</th>
-                <th>Customer</th>
+                <th>Requester</th>
                 <th>Date</th>
                 <th>Status</th>
                 <th className="number-cell">Amount</th>
@@ -1663,17 +1875,17 @@ export default function Dashboard({ user, userSessionName, activeModule: control
         <head>
           <title>CoreK Reports</title>
           <style>
-            body { color: #0f291e; font-family: Arial, sans-serif; margin: 32px; }
-            h1 { margin: 0 0 4px; font-size: 28px; }
-            h2 { border-bottom: 1px solid #dce9e3; font-size: 16px; margin-top: 28px; padding-bottom: 8px; }
-            p { color: #5b7e6e; margin: 0; }
+            body { color: #0f291e; font-family: Arial, sans-serif; font-size: 17px; margin: 34px; }
+            h1 { margin: 0 0 8px; font-size: 40px; }
+            h2 { border-bottom: 2px solid #dce9e3; font-size: 24px; margin-top: 34px; padding-bottom: 10px; }
+            p { color: #5b7e6e; font-size: 18px; margin: 0; }
             .metrics { display: grid; gap: 12px; grid-template-columns: repeat(3, 1fr); margin: 24px 0; }
-            .metric { border: 1px solid #dce9e3; border-radius: 12px; padding: 14px; }
-            .metric span { color: #5b7e6e; display: block; font-size: 12px; font-weight: 700; text-transform: uppercase; }
-            .metric strong { display: block; font-size: 20px; margin-top: 10px; text-align: right; }
+            .metric { border: 1px solid #dce9e3; border-radius: 12px; padding: 18px; }
+            .metric span { color: #5b7e6e; display: block; font-size: 15px; font-weight: 700; text-transform: uppercase; }
+            .metric strong { display: block; font-size: 28px; margin-top: 12px; text-align: right; }
             table { border-collapse: collapse; margin-top: 12px; width: 100%; }
-            th, td { border-bottom: 1px solid #dce9e3; padding: 10px; text-align: left; }
-            th { background: #f4faf7; color: #5b7e6e; font-size: 12px; text-transform: uppercase; }
+            th, td { border-bottom: 1px solid #dce9e3; font-size: 17px; padding: 13px 12px; text-align: left; }
+            th { background: #f4faf7; color: #5b7e6e; font-size: 15px; text-transform: uppercase; }
             .number { text-align: right; }
             @media print { button { display: none; } body { margin: 22px; } }
           </style>
@@ -1831,29 +2043,51 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     }
   };
 
-  const handleCheckout = async (event) => {
-    event.preventDefault();
-
-    if (!selectedCheckoutProduct) {
+  const submitCheckout = async (product, paymentMethod = 'GCash') => {
+    if (!product) {
       showError('Select a product for checkout.');
       return;
     }
 
+    const confirmed = await requestConfirmation({
+      title: 'Buy Product?',
+      message: `Confirm purchase of ${product.title} for ${formatMoney(product.price)}.`,
+      confirmLabel: 'Continue',
+    });
+    if (!confirmed) return;
+
+    const finalConfirmed = await requestConfirmation({
+      title: 'Final Purchase Confirmation',
+      message: 'This will record the payment and generate your access token.',
+      confirmLabel: 'Buy Now',
+    });
+    if (!finalConfirmed) return;
+
     try {
       const result = await api.checkout({
-        productId: selectedCheckoutProduct.productId,
+        productId: product.productId,
         customerId: userId,
         customerName: profile.fullName,
         customerEmail: profile.email,
-        paymentMethod: checkoutForm.paymentMethod,
+        paymentMethod,
       });
 
       showNotice(`Payment completed. Reference ${result.referenceNumber}.`);
       setCheckoutForm({ productId: '', paymentMethod: 'GCash' });
+      setActiveProductView(null);
       await loadDashboard();
     } catch (err) {
       showError(err.message);
     }
+  };
+
+  const handleCheckout = async (event) => {
+    event.preventDefault();
+    await submitCheckout(selectedCheckoutProduct, checkoutForm.paymentMethod);
+  };
+
+  const handleBuyProduct = async (product) => {
+    await submitCheckout(product, checkoutForm.paymentMethod || 'GCash');
   };
 
   const handleProfileSubmit = async (event) => {
@@ -1892,6 +2126,32 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       const nextUser = result.user || {};
       localStorage.setItem('corek_user', JSON.stringify(nextUser));
       showNotice(isSeller ? 'Settings saved.' : 'Profile saved.');
+      await loadDashboard();
+    } catch (err) {
+      showError(err.message);
+    }
+  };
+
+  const handleArchiveCategory = async (category) => {
+    const confirmed = await requestConfirmation({
+      title: 'Archive Category?',
+      message: `${category.categoryName} will be hidden from new listings but existing product data will stay intact.`,
+      confirmLabel: 'Archive',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+
+    const finalConfirmed = await requestConfirmation({
+      title: 'Final Archive Confirmation',
+      message: 'This keeps the database safe by archiving instead of deleting.',
+      confirmLabel: 'Archive Category',
+      tone: 'danger',
+    });
+    if (!finalConfirmed) return;
+
+    try {
+      const result = await api.deleteCategory(category.categoryId);
+      showNotice('Category Archived', result.message || 'Category archived successfully.');
       await loadDashboard();
     } catch (err) {
       showError(err.message);
@@ -2000,12 +2260,49 @@ export default function Dashboard({ user, userSessionName, activeModule: control
   };
 
   const handleTicketStatus = async (ticket, status) => {
+    let remarks = '';
+    if (isAdmin && status === 'Rejected') {
+      remarks = await requestReason({
+        title: 'Reject Support Ticket',
+        message: 'Add the reason this seller support request is rejected.',
+        label: 'Rejection reason',
+        confirmLabel: 'Continue',
+        tone: 'danger',
+      });
+      if (remarks === null) return;
+      if (!remarks) {
+        showError('Rejection remarks are required.');
+        return;
+      }
+    }
+
+    if (isAdmin && ['Approved', 'Rejected'].includes(status)) {
+      const confirmed = await requestConfirmation({
+        title: `${status} Support Ticket?`,
+        message: status === 'Rejected'
+          ? 'Confirm that this seller support request should be rejected.'
+          : 'Confirm that this seller support request should be approved.',
+        confirmLabel: status,
+        tone: status === 'Rejected' ? 'danger' : 'default',
+      });
+      if (!confirmed) return;
+
+      const finalConfirmed = await requestConfirmation({
+        title: `Final ${status} Confirmation`,
+        message: 'This status will be saved and shown in the support queue.',
+        confirmLabel: status,
+        tone: status === 'Rejected' ? 'danger' : 'default',
+      });
+      if (!finalConfirmed) return;
+    }
+
     try {
-      await api.updateTicket(ticket.supportTicketId, {
+      await api.updateTicket(getTicketId(ticket), {
         status,
         priority: ticket.priority,
+        remarks,
       });
-      showNotice('Support ticket updated.');
+      showNotice(`Support ${status}`, status === 'Rejected' ? remarks : 'Support ticket updated.');
       await loadDashboard();
     } catch (err) {
       showError(err.message);
@@ -2021,7 +2318,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       ? 'good'
       : normalized.includes('pending') || normalized.includes('open') || normalized.includes('review') || normalized.includes('payout')
         ? 'warn'
-        : normalized.includes('closed') || normalized.includes('failed') || normalized.includes('missing')
+        : normalized.includes('closed') || normalized.includes('failed') || normalized.includes('missing') || normalized.includes('reject')
           ? 'bad'
           : '';
 
@@ -2107,6 +2404,20 @@ export default function Dashboard({ user, userSessionName, activeModule: control
         </>
       )}
 
+      {isAdmin && (
+        <div className="panel admin-sales-graph-panel">
+          <div className="panel-title-row seller-sales-graph-header">
+            <div>
+              <h2>Sales Graph</h2>
+              <p>Marketplace sales by month.</p>
+            </div>
+            <BarChart3 size={20} />
+          </div>
+
+          {renderAdminSalesTrendChart()}
+        </div>
+      )}
+
       {!isSeller && (
         <div className="grid-2">
         <div className="panel">
@@ -2122,7 +2433,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                 <div>
                   <strong>{order.productTitle || order.title}</strong>
                   <span>
-                    {order.customerName} · {formatDate(order.createdAt)}
+                    {isCustomer ? getOrderSellerName(order) : order.customerName} / {formatDate(order.createdAt)}
                   </span>
                 </div>
                 <strong className="money-value">{formatMoney(order.totalAmount)}</strong>
@@ -2227,7 +2538,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
 
             <div className="discover-product-body">
               <div className="discover-product-meta">
-                <span>Creator #{product.sellerId || 'CoreK'}</span>
+                <span>{getOrderSellerName(product)}</span>
               </div>
 
               <h3>{product.title}</h3>
@@ -2235,7 +2546,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
 
               <div className="discover-product-version">
                 <span>Version {product.latestVersion || '1.0.0'}</span>
-                <span>{product.versionCount || 0} files</span>
+                <span>{formatFileCount(product.versionCount)}</span>
               </div>
 
               <div className="discover-product-footer">
@@ -2250,6 +2561,13 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                     onClick={() => openProductViewModal(product)}
                   >
                     <Eye size={16} />
+                  </button>
+                  <button
+                    className="discover-buy-button"
+                    type="button"
+                    onClick={() => openProductViewModal(product)}
+                  >
+                    Buy
                   </button>
                 </div>
               </div>
@@ -2300,7 +2618,9 @@ export default function Dashboard({ user, userSessionName, activeModule: control
   const renderProductListingModal = () => (
     <DashboardModal
       title={productModalMode === 'version' ? 'Product Version' : 'Product Listing'}
-      subtitle={productModalMode === 'version'
+      subtitle={isAdmin
+        ? ''
+        : productModalMode === 'version'
         ? 'Push an updated product version for an existing listing.'
         : 'Create or edit listing details. New seller products stay pending until admin approval.'}
       onClose={closeProductModal}
@@ -2492,7 +2812,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     const productStatus = getProductApprovalStatus(activeProductView);
     const productImageSource = getProductImageSource(activeProductView);
     const sellerDetails = getProductSellerDetails(activeProductView);
-    const productViewTitle = isCustomer ? 'Product Details' : 'View Product';
+    const productViewTitle = isCustomer || isAdmin ? 'Product Details' : 'View Product';
 
     return (
       <DashboardModal title={productViewTitle} onClose={() => setActiveProductView(null)} size={isCustomer ? 'product-details' : 'wide'}>
@@ -2542,10 +2862,19 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                   </div>
                 </>
               ) : (
-                <div className="product-view-row">
-                  <span>Status</span>
-                  {renderTextStatus(productStatus)}
-                </div>
+                <>
+                  {isAdmin && (
+                    <div className="product-view-row">
+                      <span>Seller</span>
+                      <strong>{sellerDetails.profileName}</strong>
+                    </div>
+                  )}
+
+                  <div className="product-view-row">
+                    <span>Status</span>
+                    {renderTextStatus(productStatus)}
+                  </div>
+                </>
               )}
             </div>
           </div>
@@ -2554,9 +2883,36 @@ export default function Dashboard({ user, userSessionName, activeModule: control
             <strong>Description</strong>
             <p>{activeProductView.description || 'No description provided.'}</p>
           </div>
+
+          {getProductReviewRemarks(activeProductView) && (
+            <div className="ticket-message-box">
+              <strong>Review Remarks</strong>
+              <p>{getProductReviewRemarks(activeProductView)}</p>
+            </div>
+          )}
         </div>
 
         <div className="toolbar modal-actions">
+          {isCustomer && (
+            <>
+              <label className="inline-payment-select">
+                <span>Payment</span>
+                <select
+                  value={checkoutForm.paymentMethod}
+                  onChange={(event) => setCheckoutForm({ ...checkoutForm, paymentMethod: event.target.value })}
+                >
+                  <option value="GCash">GCash</option>
+                  <option value="Card">Card</option>
+                  <option value="Maya">Maya</option>
+                </select>
+              </label>
+
+              <button className="button" type="button" onClick={() => handleBuyProduct(activeProductView)}>
+                Buy Product
+                <CreditCard size={16} />
+              </button>
+            </>
+          )}
           <button className={isCustomer ? 'button secondary' : 'button'} type="button" onClick={() => setActiveProductView(null)}>
             OK
           </button>
@@ -2604,6 +2960,38 @@ export default function Dashboard({ user, userSessionName, activeModule: control
         </button>
         <button className="button secondary" type="button" onClick={() => closeConfirmation(false)}>
           {confirmationRequest?.cancelLabel || 'Cancel'}
+        </button>
+      </div>
+    </DashboardModal>
+  );
+
+  const renderReasonModal = () => (
+    <DashboardModal title={reasonRequest?.title || 'Add Remarks'} onClose={() => closeReason(false)}>
+      <div className="confirmation-copy">
+        <p>{reasonRequest?.message}</p>
+      </div>
+
+      <div className="field full reason-field">
+        <label>{reasonRequest?.label || 'Remarks'}</label>
+        <textarea
+          autoFocus
+          value={reasonRequest?.value || ''}
+          onChange={(event) => setReasonRequest((current) => (
+            current ? { ...current, value: event.target.value } : current
+          ))}
+        />
+      </div>
+
+      <div className="toolbar modal-actions">
+        <button
+          className={`button ${reasonRequest?.tone === 'danger' ? 'danger' : ''}`}
+          type="button"
+          onClick={() => closeReason(true)}
+        >
+          {reasonRequest?.confirmLabel || 'Continue'}
+        </button>
+        <button className="button secondary" type="button" onClick={() => closeReason(false)}>
+          Cancel
         </button>
       </div>
     </DashboardModal>
@@ -2663,14 +3051,10 @@ export default function Dashboard({ user, userSessionName, activeModule: control
 
               <tbody>
                 {roleProducts.map((product) => {
-                  const adminRemarks = productReviewRemarks[product.productId];
-                  const productStatus = isAdmin
-                    ? adminRemarks
-                      ? 'Reject'
-                      : product.isActive
-                        ? 'Approved'
-                        : 'Pending'
-                    : getProductApprovalStatus(product);
+                  const productStatus = getProductApprovalStatus(product);
+                  const adminRemarks = getProductReviewRemarks(product);
+                  const isApprovedProduct = productStatus === 'Approved';
+                  const isRejectedProduct = productStatus === 'Rejected';
 
                   return (
                   <tr key={product.productId}>
@@ -2681,50 +3065,53 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                     <td>{product.category || product.categoryName}</td>
                     <td className="money-cell">{formatMoney(product.price)}</td>
                     <td className="number-cell">
-                      {product.latestVersion || '1.0.0'} · {product.versionCount || 0} files
+                      {product.latestVersion || '1.0.0'} / {formatFileCount(product.versionCount)}
                     </td>
                     <td>{renderTextStatus(productStatus)}</td>
 
                     <td className="actions">
                       {isAdmin ? (
                         <>
-                          <button
-                            className="button secondary icon-only-button"
-                            type="button"
-                            disabled={product.isActive}
-                            aria-label={`Approve ${product.title}`}
-                            title="Approve"
-                            onClick={() => handleApproveProduct(product)}
-                          >
-                            <CheckCircle size={14} />
-                          </button>
+                          {!isApprovedProduct && !isRejectedProduct && (
+                            <>
+                              <button
+                                className="button icon-only-button action-approve"
+                                type="button"
+                                aria-label={`Approve ${product.title}`}
+                                title="Approve"
+                                onClick={() => handleApproveProduct(product)}
+                              >
+                                <CheckCircle size={14} />
+                              </button>
+
+                              <button
+                                className="button icon-only-button action-reject"
+                                type="button"
+                                aria-label={`Reject ${product.title}`}
+                                title="Reject"
+                                onClick={() => handleRejectProduct(product)}
+                              >
+                                <X size={14} />
+                              </button>
+                            </>
+                          )}
 
                           <button
-                            className="button secondary icon-only-button"
-                            type="button"
-                            aria-label={`Reject ${product.title}`}
-                            title="Reject"
-                            onClick={() => handleRejectProduct(product)}
-                          >
-                            <X size={14} />
-                          </button>
-
-                          <button
-                            className="button secondary icon-only-button"
+                            className="button icon-only-button action-view"
                             type="button"
                             aria-label={`View ${product.title}`}
-                            title="View"
-                            onClick={() => openProductDetailsModal(product)}
+                            title="View Product"
+                            onClick={() => openProductViewModal(product)}
                           >
                             <Eye size={14} />
                           </button>
                         </>
                       ) : (
                         <button
-                          className="button secondary icon-only-button"
+                          className="button secondary icon-only-button compact-view-button"
                           type="button"
                           aria-label={`View ${product.title}`}
-                          title="View"
+                          title="View Product"
                           onClick={() => openProductViewModal(product)}
                         >
                           <Eye size={14} />
@@ -2793,25 +3180,19 @@ export default function Dashboard({ user, userSessionName, activeModule: control
               <div>
                 <strong>{category.categoryName}</strong>
                 <span>
-                  {category.description || 'No description'} · {category.productCount} products
+                  {category.description || 'No description'} / {category.productCount} products
                 </span>
               </div>
 
               {isAdmin && (
                 <button
-                  className="button danger icon-only-button"
+                  className="button icon-only-button action-archive"
                   type="button"
-                  onClick={async () => {
-                    try {
-                      await api.deleteCategory(category.categoryId);
-                      showNotice('Category deleted.');
-                      await loadDashboard();
-                    } catch (err) {
-                      showError(err.message);
-                    }
-                  }}
+                  aria-label={`Archive ${category.categoryName}`}
+                  title="Archive"
+                  onClick={() => handleArchiveCategory(category)}
                 >
-                  <Trash2 size={14} />
+                  <Archive size={14} />
                 </button>
               )}
             </div>
@@ -2868,6 +3249,8 @@ export default function Dashboard({ user, userSessionName, activeModule: control
 
   const renderPayments = () => {
     const paymentRows = isSeller ? dateFilteredRoleOrders : filteredLibraryOrders;
+    const showSegmentedPayments = isSeller || isAdmin;
+    const activePaymentsTableTab = showSegmentedPayments ? paymentsTableTab : 'records';
     const payoutQrSeed = [
       profile.payoutMethod || 'GCash',
       profile.payoutAccountName || displayName,
@@ -2893,7 +3276,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                   <option value="">Select digital product</option>
                   {products.map((product) => (
                     <option key={product.productId} value={product.productId}>
-                      {product.title} · {formatMoney(product.price)}
+                      {product.title} / {formatMoney(product.price)}
                     </option>
                   ))}
                 </select>
@@ -3014,11 +3397,11 @@ export default function Dashboard({ user, userSessionName, activeModule: control
           </div>
         )}
 
-        {!isCustomer && (
+        {isSeller && (
         <div className="panel">
           <div className="panel-title-row">
             <div>
-              {!isCustomer && <h2>{isSeller ? 'Recent Buyer Access' : 'Digital Delivery'}</h2>}
+              <h2>Recent Buyer Access</h2>
               {isCustomer && <p>{filteredLibraryOrders.length} records in the current view.</p>}
             </div>
 
@@ -3036,7 +3419,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                 <div>
                   <strong>{order.productTitle}</strong>
                   <span>
-                    {order.referenceNumber || 'No reference'} · {order.paymentMethod}
+                    {order.referenceNumber || 'No reference'} / {order.paymentMethod}
                   </span>
                 </div>
                 {isAdmin || isCustomer ? renderTextStatus(order.status) : renderStatus(order.status)}
@@ -3049,15 +3432,70 @@ export default function Dashboard({ user, userSessionName, activeModule: control
         )}
       </div>
 
-      <div className="panel">
+      <div className="panel segmented-table-panel">
+        {showSegmentedPayments && (
+          <div className="seller-dashboard-tabs segmented-table-tabs" role="tablist" aria-label="Payment records">
+            <button
+              className={activePaymentsTableTab === 'records' ? 'active' : ''}
+              type="button"
+              role="tab"
+              aria-selected={activePaymentsTableTab === 'records'}
+              onClick={() => setPaymentsTableTab('records')}
+            >
+              {isSeller ? 'Sales Records' : 'Payment Records'}
+            </button>
+            <button
+              className={activePaymentsTableTab === 'payouts' ? 'active' : ''}
+              type="button"
+              role="tab"
+              aria-selected={activePaymentsTableTab === 'payouts'}
+              onClick={() => setPaymentsTableTab('payouts')}
+            >
+              {isSeller ? 'Payout Request History' : 'Payout Requests'}
+            </button>
+          </div>
+        )}
+
         <div className="panel-title-row payout-records-header">
           <div>
-            <h2>{isCustomer ? 'Purchase Records' : isSeller ? 'Sales Records' : 'Payment Records'}</h2>
+            <h2>
+              {activePaymentsTableTab === 'payouts'
+                ? isAdmin ? 'Payout Requests' : 'Payout Request History'
+                : isCustomer ? 'Purchase Records' : isSeller ? 'Sales Records' : 'Payment Records'}
+            </h2>
             {isCustomer && <p>Date range: {formatDateRange(libraryFilters)}</p>}
-            {isSeller && <p>Date range: {formatDateRange(sellerDateFilters)}</p>}
+            {isSeller && activePaymentsTableTab === 'records' && <p>Date range: {formatDateRange(sellerDateFilters)}</p>}
+            {showSegmentedPayments && activePaymentsTableTab === 'payouts' && <p>Date range: {formatDateRange(payoutDateFilters)}</p>}
           </div>
 
-          {isSeller && renderSellerDateFilter('', { plain: true, compact: true, controlsOnly: true })}
+          {isSeller && activePaymentsTableTab === 'records' && renderSellerDateFilter('', { plain: true, compact: true, controlsOnly: true })}
+
+          {showSegmentedPayments && activePaymentsTableTab === 'payouts' && (
+            <div className="date-filter-controls payout-history-filter">
+              <label>
+                <span>Start</span>
+                <input
+                  type="date"
+                  value={payoutDateFilters.start}
+                  onChange={(e) => setPayoutDateFilters({ ...payoutDateFilters, start: e.target.value })}
+                />
+              </label>
+
+              <label>
+                <span>End</span>
+                <input
+                  type="date"
+                  value={payoutDateFilters.end}
+                  onChange={(e) => setPayoutDateFilters({ ...payoutDateFilters, end: e.target.value })}
+                />
+              </label>
+
+              <button className="button secondary" type="button" onClick={resetPayoutDateFilters}>
+                Reset
+                <CalendarDays size={16} />
+              </button>
+            </div>
+          )}
 
           {isCustomer && (
             <button className="button secondary" type="button" onClick={() => setIsLibraryFilterOpen(true)}>
@@ -3067,58 +3505,53 @@ export default function Dashboard({ user, userSessionName, activeModule: control
           )}
         </div>
 
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Reference No.</th>
-                <th>{isCustomer ? 'Seller' : 'Customer'}</th>
-                <th>Product</th>
-                <th className="money-cell">Total</th>
-                <th className="center-cell">Status</th>
-                <th className="number-cell">
-                  {isSeller ? 'Payout Status' : isCustomer ? 'Access Token' : 'Download Token'}
-                </th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {paymentRows.map((order) => (
-                <tr key={order.orderId}>
-                  <td>{order.referenceNumber}</td>
-                  <td>{isCustomer ? getOrderSellerName(order) : order.customerName}</td>
-                  <td>{order.productTitle}</td>
-                  <td className="money-cell">{formatMoney(order.totalAmount)}</td>
-                  <td className="center-cell">{isAdmin || isCustomer ? renderTextStatus(order.status) : renderStatus(order.status)}</td>
-                  <td className="number-cell">
-                    {isSeller
-                      ? renderStatus(order.status === 'Completed' ? 'For Payout' : 'Pending')
-                      : order.downloadToken || 'Pending'}
-                  </td>
-                </tr>
-              ))}
-
-              {paymentRows.length === 0 && (
+        {activePaymentsTableTab === 'records' ? (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
                 <tr>
-                  <td colSpan="6">
-                    <div className="empty-state">No payment records match this view.</div>
-                  </td>
+                  <th>Reference No.</th>
+                  <th>{isCustomer ? 'Seller' : 'Customer'}</th>
+                  <th>Product</th>
+                  <th className="money-cell">Total</th>
+                  <th className="center-cell">Status</th>
+                  {!isAdmin && (
+                    <th className="number-cell">
+                      {isSeller ? 'Payout Status' : 'Access Token'}
+                    </th>
+                  )}
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+              </thead>
 
-      {(isSeller || isAdmin) && (
-        <div className="panel">
-          <div className="panel-title-row payout-records-header">
-            <div>
-              <h2>{isAdmin ? 'Payout Requests' : 'Payout Request History'}</h2>
-              <p>{isAdmin ? 'Review seller payout requests and release completed payouts.' : 'Track admin review status for submitted payouts.'}</p>
-            </div>
+              <tbody>
+                {paymentRows.map((order) => (
+                  <tr key={order.orderId}>
+                    <td>{order.referenceNumber}</td>
+                    <td>{isCustomer ? getOrderSellerName(order) : order.customerName}</td>
+                    <td>{order.productTitle}</td>
+                    <td className="money-cell">{formatMoney(order.totalAmount)}</td>
+                    <td className="center-cell">{isAdmin || isCustomer ? renderTextStatus(order.status) : renderStatus(order.status)}</td>
+                    {!isAdmin && (
+                      <td className="number-cell">
+                        {isSeller
+                          ? renderStatus(order.status === 'Completed' ? 'For Payout' : 'Pending')
+                          : order.downloadToken || 'Pending'}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+
+                {paymentRows.length === 0 && (
+                  <tr>
+                    <td colSpan={isAdmin ? 5 : 6}>
+                      <div className="empty-state">No payment records match this view.</div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
-
+        ) : (
           <div className="table-wrap">
             <table className="data-table">
               <thead>
@@ -3128,16 +3561,14 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                   <th>Destination</th>
                   <th className="center-cell">Status</th>
                   <th className="number-cell">Requested</th>
-                  <th className="number-cell">Reviewed</th>
                   {isAdmin && <th>Actions</th>}
                 </tr>
               </thead>
 
               <tbody>
-                {payoutRequests.map((request) => {
+                {filteredPayoutRequests.map((request) => {
                   const payoutStatus = getPayoutStatus(request);
                   const requestedAt = request.requestedAt || request.RequestedAt;
-                  const reviewedAt = request.reviewedAt || request.ReviewedAt;
                   const destination = [
                     request.payoutMethod || request.PayoutMethod || 'GCash',
                     request.payoutAccountName || request.PayoutAccountName || 'No account name',
@@ -3146,23 +3577,27 @@ export default function Dashboard({ user, userSessionName, activeModule: control
 
                   return (
                     <tr key={getPayoutId(request)}>
-                      <td>{isAdmin ? getPayoutSellerName(request) : getPayoutDateRange(request)}</td>
+                      <td>
+                        {isAdmin ? getPayoutSellerName(request) : getPayoutDateRange(request)}
+                        {getPayoutRemarks(request) && <span className="table-note">Remarks: {getPayoutRemarks(request)}</span>}
+                      </td>
                       <td className="money-cell">{formatMoney(getPayoutAmount(request))}</td>
                       <td>{destination}</td>
                       <td className="center-cell">{isAdmin ? renderTextStatus(payoutStatus) : renderStatus(payoutStatus)}</td>
                       <td className="number-cell">{formatDate(requestedAt)}</td>
-                      <td className="number-cell">{reviewedAt ? formatDate(reviewedAt) : 'Pending'}</td>
                       {isAdmin && (
                         <td className="actions payout-status-actions">
-                          {['Approved', 'Released', 'Rejected'].map((status) => (
+                          {['Approved', 'Rejected'].map((status) => (
                             <button
-                              className={payoutStatus === status ? 'button' : 'button secondary'}
+                              className={`button icon-only-button ${status === 'Approved' ? 'action-approve' : 'action-reject'}`}
                               disabled={payoutStatus === status}
                               key={status}
                               type="button"
+                              aria-label={`${status} payout request`}
+                              title={status}
                               onClick={() => handlePayoutStatus(request, status)}
                             >
-                              {status}
+                              {status === 'Approved' ? <CheckCircle size={14} /> : <X size={14} />}
                             </button>
                           ))}
                         </td>
@@ -3171,18 +3606,18 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                   );
                 })}
 
-                {payoutRequests.length === 0 && (
+                {filteredPayoutRequests.length === 0 && (
                   <tr>
-                    <td colSpan={isAdmin ? 7 : 6}>
-                      <div className="empty-state">No payout requests yet.</div>
+                    <td colSpan={isAdmin ? 6 : 5}>
+                      <div className="empty-state">No payout requests match this view.</div>
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
     );
   };
@@ -3639,12 +4074,92 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       </form>
     );
 
-    if (!isSeller) return profileForm;
+    const securityPanel = (
+      <div className="panel account-security-panel security-standards-panel">
+        <div>
+          <h2>Security</h2>
+          <p>Standard account protections for this CoreK workspace.</p>
+        </div>
+
+        <div className="security-standards-grid">
+          <div>
+            <CheckCircle size={16} />
+            <strong>Email verification</strong>
+            <span>{activeUser.isEmailVerified || activeUser.IsEmailVerified ? 'Verified' : 'Verification recommended'}</span>
+          </div>
+          <div>
+            <KeyRound size={16} />
+            <strong>Password standard</strong>
+            <span>Use at least 8 characters with mixed letters and numbers.</span>
+          </div>
+          <div>
+            <LogOut size={16} />
+            <strong>Session safety</strong>
+            <span>Sign out on shared devices after every admin or seller session.</span>
+          </div>
+        </div>
+
+        <button className="button secondary" type="button" onClick={() => setIsChangePasswordModalOpen(true)}>
+          Change Password
+          <KeyRound size={16} />
+        </button>
+      </div>
+    );
+
+    if (!isSeller) {
+      return (
+        <div className="module-stack account-segmented-shell">
+          <div className="seller-dashboard-tabs account-settings-tabs" role="tablist" aria-label="Customer account settings">
+            <button
+              className={profileSettingsTab === 'account' ? 'active' : ''}
+              type="button"
+              onClick={() => setProfileSettingsTab('account')}
+            >
+              Account Settings
+            </button>
+            <button
+              className={profileSettingsTab === 'security' ? 'active' : ''}
+              type="button"
+              onClick={() => setProfileSettingsTab('security')}
+            >
+              Security
+            </button>
+          </div>
+
+          {profileSettingsTab === 'security' ? securityPanel : profileForm}
+        </div>
+      );
+    }
 
     return (
-      <div className="module-stack seller-account-settings">
-        {profileForm}
+      <div className="module-stack seller-account-settings account-segmented-shell">
+        <div className="seller-dashboard-tabs account-settings-tabs" role="tablist" aria-label="Seller account settings">
+          <button
+            className={profileSettingsTab === 'account' ? 'active' : ''}
+            type="button"
+            onClick={() => setProfileSettingsTab('account')}
+          >
+            Account Settings
+          </button>
+          <button
+            className={profileSettingsTab === 'subscription' ? 'active' : ''}
+            type="button"
+            onClick={() => setProfileSettingsTab('subscription')}
+          >
+            Subscription
+          </button>
+          <button
+            className={profileSettingsTab === 'security' ? 'active' : ''}
+            type="button"
+            onClick={() => setProfileSettingsTab('security')}
+          >
+            Security
+          </button>
+        </div>
 
+        {profileSettingsTab === 'account' && profileForm}
+
+        {profileSettingsTab === 'subscription' && (
         <form className="panel subscription-settings-panel" onSubmit={handleSubscriptionSubmit} noValidate>
           <div className="panel-title-row">
             <div>
@@ -3732,17 +4247,9 @@ export default function Dashboard({ user, userSessionName, activeModule: control
             </button>
           </div>
         </form>
+        )}
 
-        <div className="panel account-security-panel">
-          <div>
-            <h2>Security</h2>
-            <p>Change the password used to access this seller ERP workspace.</p>
-          </div>
-          <button className="button secondary" type="button" onClick={() => setIsChangePasswordModalOpen(true)}>
-            Change Password
-            <KeyRound size={16} />
-          </button>
-        </div>
+        {profileSettingsTab === 'security' && securityPanel}
       </div>
     );
   };
@@ -3956,21 +4463,22 @@ export default function Dashboard({ user, userSessionName, activeModule: control
 
   const renderSupportTicketModal = () => (
     <DashboardModal
-      title="Submit Ticket"
-      subtitle="Send a product, order, or account concern to support."
+      title={isSeller ? 'Seller Support' : 'Submit Ticket'}
+      subtitle={isSeller ? 'Send an account, payout, or listing concern to admin.' : 'Send a product or order concern to the seller.'}
       onClose={() => setIsTicketModalOpen(false)}
       size="wide"
     >
       <form onSubmit={handleTicketSubmit}>
         <div className="form-grid">
           <div className="field">
-            <label>Product</label>
+            <label>{isCustomer ? 'Purchased Product' : 'Product'}</label>
             <select
               value={ticketForm.productId}
               onChange={(e) => setTicketForm({ ...ticketForm, productId: e.target.value })}
+              required={isCustomer}
             >
-              <option value="">General inquiry</option>
-              {(isCustomer ? products : roleProducts).map((product) => (
+              <option value="">{isCustomer ? 'Select purchased product' : 'General admin support'}</option>
+              {(isCustomer ? purchasedProductOptions : roleProducts).map((product) => (
                 <option key={product.productId} value={product.productId}>
                   {product.title}
                 </option>
@@ -3982,7 +4490,14 @@ export default function Dashboard({ user, userSessionName, activeModule: control
             <label>Order</label>
             <select
               value={ticketForm.orderId}
-              onChange={(e) => setTicketForm({ ...ticketForm, orderId: e.target.value })}
+              onChange={(e) => {
+                const selectedOrder = roleOrders.find((order) => String(order.orderId) === e.target.value);
+                setTicketForm({
+                  ...ticketForm,
+                  orderId: e.target.value,
+                  productId: selectedOrder?.productId ? String(selectedOrder.productId) : ticketForm.productId,
+                });
+              }}
             >
               <option value="">No order selected</option>
               {roleOrders.map((order) => (
@@ -4026,7 +4541,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
 
         <div className="toolbar modal-actions">
           <button className="button" type="submit">
-            Send Ticket
+            {isSeller ? 'Send to Admin' : 'Send to Seller'}
             <Send size={16} />
           </button>
 
@@ -4074,7 +4589,14 @@ export default function Dashboard({ user, userSessionName, activeModule: control
           <p>{activeTicket?.message || 'No message provided.'}</p>
         </div>
 
-        {(isSeller || isAdmin) && (
+        {getTicketRemarks(activeTicket) && (
+          <div className="ticket-message-box">
+            <strong>Review Remarks</strong>
+            <p>{getTicketRemarks(activeTicket)}</p>
+          </div>
+        )}
+
+        {isSeller && getTicketRequesterRole(activeTicket) === 'Customer' && (
           <div className="toolbar modal-actions">
             {['Open', 'In Review', 'Closed'].map((status) => (
               <button
@@ -4086,6 +4608,25 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                   setActiveTicket({ ...activeTicket, status, updatedAt: new Date().toISOString() });
                 }}
               >
+                {status}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {isAdmin && getTicketRequesterRole(activeTicket) === 'Seller' && (
+          <div className="toolbar modal-actions">
+            {['Approved', 'Rejected'].map((status) => (
+              <button
+                className={`button icon-action-button ${status === 'Approved' ? 'action-approve' : 'action-reject'}`}
+                key={status}
+                type="button"
+                onClick={async () => {
+                  await handleTicketStatus(activeTicket, status);
+                  setActiveTicket({ ...activeTicket, status, updatedAt: new Date().toISOString() });
+                }}
+              >
+                {status === 'Approved' ? <CheckCircle size={16} /> : <X size={16} />}
                 {status}
               </button>
             ))}
@@ -4186,8 +4727,8 @@ export default function Dashboard({ user, userSessionName, activeModule: control
         {!isAdmin && (
           <div className="panel support-command-panel">
             <div>
-              <h2>Support Center</h2>
-              <p>Create a ticket and keep your queue visible while you work.</p>
+              <h2>{isSeller ? 'Seller Support' : 'Support Center'}</h2>
+              <p>{isSeller ? 'Send account, payout, or listing concerns to admin.' : 'Create a ticket for a product you purchased.'}</p>
             </div>
 
             <button className="button" type="button" onClick={() => setIsTicketModalOpen(true)}>
@@ -4198,7 +4739,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
         )}
 
         <div className="panel">
-          <h2>{isAdmin ? 'Support Queue' : isSeller ? 'Buyer Support Queue' : 'My Tickets'}</h2>
+          <h2>{isAdmin ? 'Seller Support Requests' : isSeller ? 'Seller Support' : 'My Seller Tickets'}</h2>
 
           <div className="mini-list">
             {roleTickets.slice(0, 5).map((ticket) => (
@@ -4206,7 +4747,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
                 <div>
                   <strong>{ticket.subject}</strong>
                   <span>
-                    {ticket.customerName} · {ticket.priority}
+                    {ticket.customerName} / {ticket.priority}
                   </span>
                 </div>
                 {renderStatus(ticket.status)}
@@ -4226,7 +4767,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
             <thead>
               <tr>
                 <th>Subject</th>
-                <th>Customer</th>
+                <th>Requester</th>
                 <th>Product</th>
                 <th>Priority</th>
                 <th>Status</th>
@@ -4236,33 +4777,68 @@ export default function Dashboard({ user, userSessionName, activeModule: control
             </thead>
 
             <tbody>
-              {roleTickets.map((ticket) => (
-                <tr key={ticket.supportTicketId}>
+              {roleTickets.map((ticket) => {
+                const requesterRole = getTicketRequesterRole(ticket);
+                const canSellerManage = isSeller && requesterRole === 'Customer';
+                const canAdminReview = isAdmin && requesterRole === 'Seller';
+
+                return (
+                <tr key={getTicketId(ticket)}>
                   <td>
                     <strong>{ticket.subject}</strong>
+                    {getTicketRemarks(ticket) && <span className="table-note">Remarks: {getTicketRemarks(ticket)}</span>}
                   </td>
                   <td>{ticket.customerName}</td>
-                  <td>{ticket.productTitle || 'General'}</td>
+                  <td>{ticket.productTitle || (requesterRole === 'Seller' ? 'Admin support' : 'General')}</td>
                   <td>{ticket.priority}</td>
                   <td>
-                    {isCustomer ? (
-                      renderStatus(ticket.status)
-                    ) : (
+                    {canSellerManage ? (
                       <select value={ticket.status} onChange={(e) => handleTicketStatus(ticket, e.target.value)}>
                         <option value="Open">Open</option>
                         <option value="In Review">In Review</option>
                         <option value="Closed">Closed</option>
                       </select>
+                    ) : (
+                      renderStatus(ticket.status)
                   )}
                   </td>
                   <td className="number-cell">{formatDate(ticket.updatedAt)}</td>
                   <td className="actions">
-                    <button className="button secondary" type="button" onClick={() => setActiveTicket(ticket)}>
-                      View
+                    <button
+                      className="button icon-only-button action-view"
+                      type="button"
+                      aria-label={`View ${ticket.subject}`}
+                      title="View Details"
+                      onClick={() => setActiveTicket(ticket)}
+                    >
+                      <Eye size={14} />
                     </button>
+                    {canAdminReview && (
+                      <>
+                        <button
+                          className="button icon-only-button action-approve"
+                          type="button"
+                          aria-label={`Approve ${ticket.subject}`}
+                          title="Approve"
+                          onClick={() => handleTicketStatus(ticket, 'Approved')}
+                        >
+                          <CheckCircle size={14} />
+                        </button>
+                        <button
+                          className="button icon-only-button action-reject"
+                          type="button"
+                          aria-label={`Reject ${ticket.subject}`}
+                          title="Reject"
+                          onClick={() => handleTicketStatus(ticket, 'Rejected')}
+                        >
+                          <X size={14} />
+                        </button>
+                      </>
+                    )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
 
               {roleTickets.length === 0 && (
                 <tr>
@@ -4290,7 +4866,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       reports: ['Reports and Analytics', 'Review sales analytics, category performance, top products, and support load.'],
       users: ['User Directory', 'View registered admins, sellers, and customers without changing their account records.'],
       profile: ['Account Settings', 'View account details and payout settings.'],
-      support: ['Helpdesk Monitor', 'View product and order-related support tickets across the marketplace.'],
+      support: ['Seller Support', 'Review seller requests sent to admin.'],
     },
     Seller: {
       overview: [`Hello! ${displayName}`, ''],
@@ -4298,14 +4874,14 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       payments: ['Payout Activity', 'Monitor buyer orders, delivery access, and checkout references.'],
       reports: ['', ''],
       profile: ['Account Settings', 'Maintain storefront details and payout account settings.'],
-      support: ['Buyer Support', 'Respond to product and order issues connected to your listings.'],
+      support: ['Seller Support', 'Send admin support requests and manage customer product tickets.'],
     },
     Customer: {
       overview: [`Hi, ${firstName}`, 'Browse the marketplace, see your purchases, and keep support close.'],
       products: ['Marketplace', 'Discover digital products, review versions, and choose what to buy.'],
       payments: ['My Library', 'View purchase references and delivery records.'],
       profile: ['Customer Profile', 'Maintain your buyer information and account protection settings.'],
-      support: ['Support Tickets', 'Ask for help on orders, downloads, product files, or account concerns.'],
+      support: ['Seller Support', 'Ask the seller for help on products you bought.'],
     },
   };
 
@@ -4342,13 +4918,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
         <div className="dashboard-user">
           <strong>{displayName}</strong>
           <span className="role-label-clean">
-            {normalizedRole} - User #{userId}
-          </span>
-          <span className="role-label">
-            {normalizedRole} · User #{userId}
-          </span>
-          <span>
-            {role} · User #{userId}
+            {normalizedRole}
           </span>
         </div>
 
@@ -4407,6 +4977,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       {activeProductView && renderProductViewModal()}
       {notificationModal && renderNotificationModal()}
       {confirmationRequest && renderConfirmationModal()}
+      {reasonRequest && renderReasonModal()}
       {isTicketModalOpen && renderSupportTicketModal()}
       {activeTicket && renderTicketDetailsModal()}
       {isValidIdModalOpen && renderValidIdModal()}

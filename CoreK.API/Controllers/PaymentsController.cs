@@ -325,6 +325,7 @@ namespace CoreK.API.Controllers
                 RangeStart = startDate,
                 RangeEnd = endDate,
                 Status = "Pending Review",
+                ReviewRemarks = null,
                 RequestedAt = DateTime.UtcNow
             };
 
@@ -357,14 +358,20 @@ namespace CoreK.API.Controllers
             {
                 "Pending Review",
                 "Approved",
-                "Released",
                 "Rejected"
             };
 
             var requestedStatus = dto.Status?.Trim() ?? string.Empty;
             if (!allowedStatuses.Contains(requestedStatus))
             {
-                return BadRequest(new { message = "Payout status must be Pending Review, Approved, Released, or Rejected." });
+                return BadRequest(new { message = "Payout status must be Pending Review, Approved, or Rejected." });
+            }
+
+            var remarks = dto.Remarks?.Trim();
+            if (requestedStatus.Equals("Rejected", StringComparison.OrdinalIgnoreCase)
+                && string.IsNullOrWhiteSpace(remarks))
+            {
+                return BadRequest(new { message = "Rejection remarks are required." });
             }
 
             PayoutRequest? payoutRequest;
@@ -385,6 +392,7 @@ namespace CoreK.API.Controllers
             payoutRequest.Status = allowedStatuses.First(status =>
                 status.Equals(requestedStatus, StringComparison.OrdinalIgnoreCase));
             payoutRequest.ReviewedAt = payoutRequest.Status == "Pending Review" ? null : DateTime.UtcNow;
+            payoutRequest.ReviewRemarks = payoutRequest.Status == "Rejected" ? remarks : null;
 
             try
             {
@@ -417,7 +425,8 @@ namespace CoreK.API.Controllers
                 request.RangeEnd,
                 request.Status,
                 request.RequestedAt,
-                request.ReviewedAt
+                request.ReviewedAt,
+                request.ReviewRemarks
             };
         }
     }

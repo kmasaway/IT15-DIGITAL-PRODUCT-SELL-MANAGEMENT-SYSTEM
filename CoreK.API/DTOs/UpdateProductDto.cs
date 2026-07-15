@@ -18,5 +18,11 @@ namespace CoreK.API.DTOs
         public decimal Price { get; set; }
 
         public bool IsActive { get; set; } = true;
+
+        [StringLength(50)]
+        public string? ApprovalStatus { get; set; }
+
+        [StringLength(500)]
+        public string? ReviewRemarks { get; set; }
     }
 }

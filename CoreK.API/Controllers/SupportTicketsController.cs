@@ -35,7 +35,9 @@ namespace CoreK.API.Controllers
                 }
                 else if (IsSeller)
                 {
-                    query = query.Where(t => t.Product != null && t.Product.SellerId == CurrentUserId);
+                    query = query.Where(t =>
+                        t.CustomerId == CurrentUserId ||
+                        (t.Product != null && t.Product.SellerId == CurrentUserId));
                 }
                 else if (customerId.HasValue)
                 {
@@ -63,6 +65,8 @@ namespace CoreK.API.Controllers
                         t.Message,
                         t.Status,
                         t.Priority,
+                        RequesterRole = string.IsNullOrWhiteSpace(t.RequesterRole) ? "Customer" : t.RequesterRole,
+                        t.ReviewRemarks,
                         t.CreatedAt,
                         t.UpdatedAt
                     })
@@ -126,10 +130,26 @@ namespace CoreK.API.Controllers
                 var product = await _context.Products.FirstOrDefaultAsync(p => p.ProductId == ticketProductId.Value);
                 if (product == null) return BadRequest("Selected product does not exist.");
 
+                if (IsCustomer)
+                {
+                    var hasPurchasedProduct = await _context.Orders.AnyAsync(o =>
+                        o.CustomerId == CurrentUserId &&
+                        o.ProductId == ticketProductId.Value &&
+                        o.Status == "Completed");
+                    if (!hasPurchasedProduct)
+                    {
+                        return BadRequest("Support tickets can only be sent for products you have purchased.");
+                    }
+                }
+
                 if (IsSeller && product.SellerId != CurrentUserId)
                 {
                     return Forbid();
                 }
+            }
+            else if (IsCustomer)
+            {
+                return BadRequest("Choose a purchased product or order so support can be sent to the seller.");
             }
 
             var customerName = string.IsNullOrWhiteSpace(dto.CustomerName)
@@ -160,7 +180,9 @@ namespace CoreK.API.Controllers
                 Subject = subject,
                 Message = message,
                 Priority = priority,
-                Status = "Open"
+                Status = "Open",
+                RequesterRole = IsSeller ? "Seller" : IsAdmin ? "Admin" : "Customer",
+                ReviewRemarks = null
             };
 
             try
@@ -196,8 +218,30 @@ namespace CoreK.API.Controllers
             if (ticket == null) return NotFound("Support ticket not found.");
             if (!IsAdmin && (ticket.Product == null || ticket.Product.SellerId != CurrentUserId)) return Forbid();
 
-            ticket.Status = string.IsNullOrWhiteSpace(dto.Status) ? "Open" : dto.Status.Trim();
+            var status = string.IsNullOrWhiteSpace(dto.Status) ? "Open" : dto.Status.Trim();
+            var allowedStatuses = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "Open",
+                "In Review",
+                "Approved",
+                "Rejected",
+                "Closed"
+            };
+            if (!allowedStatuses.Contains(status))
+            {
+                return BadRequest("Support status must be Open, In Review, Approved, Rejected, or Closed.");
+            }
+
+            var remarks = dto.Remarks?.Trim();
+            if (IsAdmin && status.Equals("Rejected", StringComparison.OrdinalIgnoreCase)
+                && string.IsNullOrWhiteSpace(remarks))
+            {
+                return BadRequest("Rejection remarks are required.");
+            }
+
+            ticket.Status = allowedStatuses.First(s => s.Equals(status, StringComparison.OrdinalIgnoreCase));
             ticket.Priority = string.IsNullOrWhiteSpace(dto.Priority) ? "Normal" : dto.Priority.Trim();
+            ticket.ReviewRemarks = ticket.Status == "Rejected" ? remarks : null;
             ticket.UpdatedAt = DateTime.UtcNow;
 
             try
