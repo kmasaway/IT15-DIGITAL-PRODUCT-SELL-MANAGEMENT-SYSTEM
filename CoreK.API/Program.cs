@@ -309,6 +309,129 @@ static void EnsureSellerAccountTables(AppDbContext db, ILogger logger)
                 );
             END;
 
+            IF OBJECT_ID(N'[SellerSubscriptions]', N'U') IS NOT NULL
+            BEGIN
+                ;WITH RankedSellerSubscriptions AS (
+                    SELECT
+                        [SellerSubscriptionId],
+                        ROW_NUMBER() OVER (
+                            PARTITION BY [SellerId]
+                            ORDER BY [UpdatedAt] DESC, [SellerSubscriptionId] DESC
+                        ) AS [DuplicateRank]
+                    FROM [SellerSubscriptions]
+                )
+                DELETE FROM RankedSellerSubscriptions
+                WHERE [DuplicateRank] > 1;
+
+                UPDATE [SellerSubscriptions]
+                SET
+                    [Plan] = CASE
+                        WHEN [Plan] IN (N'Starter', N'Professional', N'Enterprise') THEN [Plan]
+                        ELSE N'Starter'
+                    END,
+                    [BillingCycle] = CASE
+                        WHEN [BillingCycle] IN (N'Monthly', N'Quarterly', N'Annual') THEN [BillingCycle]
+                        ELSE N'Monthly'
+                    END,
+                    [Seats] = CASE
+                        WHEN [Seats] BETWEEN 1 AND 50 THEN [Seats]
+                        ELSE 1
+                    END,
+                    [UpdatedAt] = CASE
+                        WHEN [UpdatedAt] IS NULL THEN SYSUTCDATETIME()
+                        ELSE [UpdatedAt]
+                    END;
+
+                IF OBJECT_ID(N'[Users]', N'U') IS NOT NULL
+                BEGIN
+                    UPDATE subscriptions
+                    SET [BillingEmail] = users.[Email]
+                    FROM [SellerSubscriptions] subscriptions
+                    INNER JOIN [Users] users ON users.[UserId] = subscriptions.[SellerId]
+                    WHERE NULLIF(LTRIM(RTRIM(subscriptions.[BillingEmail])), N'') IS NULL;
+
+                    INSERT INTO [SellerSubscriptions] (
+                        [SellerId],
+                        [Plan],
+                        [BillingCycle],
+                        [BillingEmail],
+                        [Seats],
+                        [AutoRenew],
+                        [UpdatedAt]
+                    )
+                    SELECT
+                        users.[UserId],
+                        N'Starter',
+                        N'Monthly',
+                        COALESCE(NULLIF(LTRIM(RTRIM(users.[Email])), N''), N'billing@corek.local'),
+                        1,
+                        CAST(0 AS bit),
+                        SYSUTCDATETIME()
+                    FROM [Users] users
+                    WHERE users.[Role] = N'Seller'
+                        AND NOT EXISTS (
+                            SELECT 1
+                            FROM [SellerSubscriptions] subscriptions
+                            WHERE subscriptions.[SellerId] = users.[UserId]
+                        );
+                END;
+
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM sys.default_constraints constraints
+                    INNER JOIN sys.columns columns
+                        ON columns.[object_id] = constraints.[parent_object_id]
+                        AND columns.[column_id] = constraints.[parent_column_id]
+                    WHERE constraints.[parent_object_id] = OBJECT_ID(N'[SellerSubscriptions]')
+                        AND columns.[name] = N'Plan'
+                )
+                    ALTER TABLE [SellerSubscriptions] ADD CONSTRAINT [DF_SellerSubscriptions_Plan] DEFAULT N'Starter' FOR [Plan];
+
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM sys.default_constraints constraints
+                    INNER JOIN sys.columns columns
+                        ON columns.[object_id] = constraints.[parent_object_id]
+                        AND columns.[column_id] = constraints.[parent_column_id]
+                    WHERE constraints.[parent_object_id] = OBJECT_ID(N'[SellerSubscriptions]')
+                        AND columns.[name] = N'BillingCycle'
+                )
+                    ALTER TABLE [SellerSubscriptions] ADD CONSTRAINT [DF_SellerSubscriptions_BillingCycle] DEFAULT N'Monthly' FOR [BillingCycle];
+
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM sys.default_constraints constraints
+                    INNER JOIN sys.columns columns
+                        ON columns.[object_id] = constraints.[parent_object_id]
+                        AND columns.[column_id] = constraints.[parent_column_id]
+                    WHERE constraints.[parent_object_id] = OBJECT_ID(N'[SellerSubscriptions]')
+                        AND columns.[name] = N'Seats'
+                )
+                    ALTER TABLE [SellerSubscriptions] ADD CONSTRAINT [DF_SellerSubscriptions_Seats] DEFAULT 1 FOR [Seats];
+
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM sys.default_constraints constraints
+                    INNER JOIN sys.columns columns
+                        ON columns.[object_id] = constraints.[parent_object_id]
+                        AND columns.[column_id] = constraints.[parent_column_id]
+                    WHERE constraints.[parent_object_id] = OBJECT_ID(N'[SellerSubscriptions]')
+                        AND columns.[name] = N'AutoRenew'
+                )
+                    ALTER TABLE [SellerSubscriptions] ADD CONSTRAINT [DF_SellerSubscriptions_AutoRenew] DEFAULT CAST(0 AS bit) FOR [AutoRenew];
+
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM sys.default_constraints constraints
+                    INNER JOIN sys.columns columns
+                        ON columns.[object_id] = constraints.[parent_object_id]
+                        AND columns.[column_id] = constraints.[parent_column_id]
+                    WHERE constraints.[parent_object_id] = OBJECT_ID(N'[SellerSubscriptions]')
+                        AND columns.[name] = N'UpdatedAt'
+                )
+                    ALTER TABLE [SellerSubscriptions] ADD CONSTRAINT [DF_SellerSubscriptions_UpdatedAt] DEFAULT SYSUTCDATETIME() FOR [UpdatedAt];
+            END;
+
             IF OBJECT_ID(N'[ValidIdSubmissions]', N'U') IS NULL
             BEGIN
                 CREATE TABLE [ValidIdSubmissions] (

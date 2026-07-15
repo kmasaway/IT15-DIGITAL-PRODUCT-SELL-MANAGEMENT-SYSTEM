@@ -3,6 +3,7 @@ import { Download, LayoutDashboard, LifeBuoy, Package, UserCog } from 'lucide-re
 import LandingPage from './pages/LandingPage';
 import AuthModal from './components/AuthModal';
 import Dashboard from './pages/Dashboard';
+import corekMark from './assets/corek-mark.svg';
 
 const CUSTOMER_NAV_ITEMS = [
   { id: 'overview', label: 'Dashboard', icon: LayoutDashboard },
@@ -73,6 +74,7 @@ export default function App() {
       {/* Dynamic Header / Navigation Bar */}
       <header style={styles.navbar}>
         <div style={styles.logoGroup}>
+          <img src={corekMark} alt="CoreK logo" style={styles.logoMark} />
           <span style={styles.logoText}>ᴄᴏʀᴇᴋ</span>
         </div>
         {isCustomerSession ? (
@@ -175,8 +177,16 @@ const styles = {
   logoGroup: {
     display: 'flex',
     alignItems: 'center',
+    gap: '0.65rem',
     justifySelf: 'start',
     minHeight: '42px'
+  },
+  logoMark: {
+    width: '46px',
+    height: '46px',
+    objectFit: 'contain',
+    display: 'block',
+    flexShrink: 0
   },
   logoText: {
     display: 'inline-flex',

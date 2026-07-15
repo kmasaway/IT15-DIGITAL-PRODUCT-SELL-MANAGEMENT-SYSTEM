@@ -12,7 +12,7 @@ namespace CoreK.API.Models
 
         [Required]
         [StringLength(50)]
-        public string Plan { get; set; } = "Professional";
+        public string Plan { get; set; } = "Starter";
 
         [Required]
         [StringLength(50)]
@@ -22,9 +22,9 @@ namespace CoreK.API.Models
         [StringLength(150)]
         public string BillingEmail { get; set; } = string.Empty;
 
-        public int Seats { get; set; } = 3;
+        public int Seats { get; set; } = 1;
 
-        public bool AutoRenew { get; set; } = true;
+        public bool AutoRenew { get; set; } = false;
 
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     }

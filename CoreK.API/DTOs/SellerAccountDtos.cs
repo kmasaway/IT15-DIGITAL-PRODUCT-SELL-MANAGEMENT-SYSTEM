@@ -16,7 +16,7 @@ namespace CoreK.API.DTOs
     {
         [Required]
         [StringLength(50)]
-        public string Plan { get; set; } = "Professional";
+        public string Plan { get; set; } = "Starter";
 
         [Required]
         [StringLength(50)]
@@ -28,8 +28,8 @@ namespace CoreK.API.DTOs
         public string BillingEmail { get; set; } = string.Empty;
 
         [Range(1, 50)]
-        public int Seats { get; set; } = 3;
+        public int Seats { get; set; } = 1;
 
-        public bool AutoRenew { get; set; } = true;
+        public bool AutoRenew { get; set; } = false;
     }
 }

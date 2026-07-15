@@ -70,6 +70,19 @@ namespace CoreK.API.Controllers
             };
 
             _context.Users.Add(newUser);
+            if (safeRole.Equals("Seller", StringComparison.OrdinalIgnoreCase))
+            {
+                _context.SellerSubscriptions.Add(new SellerSubscription
+                {
+                    Seller = newUser,
+                    Plan = "Starter",
+                    BillingCycle = "Monthly",
+                    BillingEmail = email,
+                    Seats = 1,
+                    AutoRenew = false,
+                    UpdatedAt = DateTime.UtcNow
+                });
+            }
             await _context.SaveChangesAsync();
 
             if (!isEmailVerificationConfigured)

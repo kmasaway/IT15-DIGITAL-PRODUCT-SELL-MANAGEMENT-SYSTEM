@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Search, LogOut } from 'lucide-react';
+import corekMark from '../assets/corek-mark.svg';
 
 export default function Header({ currentPage, setCurrentPage, isLoggedIn, onLogout, onOpenAuthModal, onSearchChange }) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -17,6 +18,7 @@ export default function Header({ currentPage, setCurrentPage, isLoggedIn, onLogo
           style={styles.brand} 
           onClick={() => setCurrentPage(isLoggedIn ? 'home' : 'landing')}
         >
+          <img src={corekMark} alt="CoreK logo" style={styles.logoMark} />
           <span style={styles.logo}>ᴄᴏʀᴇᴋ</span>
         </div>
 
@@ -110,7 +112,14 @@ const styles = {
     width: '100%' 
   },
   leftSection: { display: 'flex', alignItems: 'center', gap: '2.5rem', flex: 1, maxWidth: '800px' },
-  brand: { display: 'flex', alignItems: 'center', cursor: 'pointer' },
+  brand: { display: 'flex', alignItems: 'center', gap: '0.65rem', cursor: 'pointer' },
+  logoMark: {
+    width: '46px',
+    height: '46px',
+    objectFit: 'contain',
+    display: 'block',
+    flexShrink: 0
+  },
   logo: {
     border: 'none',
     borderRadius: 0,

@@ -19,6 +19,8 @@ namespace CoreK.API.Controllers
             "Passport",
             "UMID"
         ];
+        private static readonly string[] AllowedSubscriptionPlans = ["Starter", "Professional", "Enterprise"];
+        private static readonly string[] AllowedBillingCycles = ["Monthly", "Quarterly", "Annual"];
 
         private readonly AppDbContext _context;
         private readonly IWebHostEnvironment _environment;
@@ -192,6 +194,10 @@ namespace CoreK.API.Controllers
 
             var seller = await _context.Users.FindAsync(sellerId);
             if (seller == null) return NotFound("Seller account was not found.");
+            if (!seller.Role.Equals("Seller", StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest("Subscriptions are only available for seller accounts.");
+            }
 
             SellerSubscription subscription;
 
@@ -216,18 +222,20 @@ namespace CoreK.API.Controllers
 
             var seller = await _context.Users.FindAsync(sellerId);
             if (seller == null) return NotFound("Seller account was not found.");
+            if (!seller.Role.Equals("Seller", StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest("Subscriptions are only available for seller accounts.");
+            }
 
-            var plan = dto.Plan?.Trim() ?? string.Empty;
-            var billingCycle = dto.BillingCycle?.Trim() ?? string.Empty;
+            var plan = NormalizeSubscriptionOption(dto.Plan, AllowedSubscriptionPlans);
+            var billingCycle = NormalizeSubscriptionOption(dto.BillingCycle, AllowedBillingCycles);
             var billingEmail = dto.BillingEmail?.Trim() ?? string.Empty;
-            var allowedPlans = new[] { "Starter", "Professional", "Enterprise" };
-            var allowedCycles = new[] { "Monthly", "Quarterly", "Annual" };
-            if (!allowedPlans.Contains(plan, StringComparer.OrdinalIgnoreCase))
+            if (plan == null)
             {
                 return BadRequest("Unsupported subscription plan.");
             }
 
-            if (!allowedCycles.Contains(billingCycle, StringComparer.OrdinalIgnoreCase))
+            if (billingCycle == null)
             {
                 return BadRequest("Unsupported billing cycle.");
             }
@@ -269,7 +277,12 @@ namespace CoreK.API.Controllers
             return new SellerSubscription
             {
                 SellerId = seller.UserId,
-                BillingEmail = seller.Email
+                Plan = "Starter",
+                BillingCycle = "Monthly",
+                BillingEmail = seller.Email,
+                Seats = 1,
+                AutoRenew = false,
+                UpdatedAt = DateTime.UtcNow
             };
         }
 
@@ -283,10 +296,22 @@ namespace CoreK.API.Controllers
             subscription = new SellerSubscription
             {
                 SellerId = seller.UserId,
-                BillingEmail = seller.Email
+                Plan = "Starter",
+                BillingCycle = "Monthly",
+                BillingEmail = seller.Email,
+                Seats = 1,
+                AutoRenew = false,
+                UpdatedAt = DateTime.UtcNow
             };
             _context.SellerSubscriptions.Add(subscription);
             return subscription;
+        }
+
+        private static string? NormalizeSubscriptionOption(string? value, IReadOnlyList<string> allowedValues)
+        {
+            var trimmedValue = value?.Trim() ?? string.Empty;
+            return allowedValues.FirstOrDefault(allowedValue =>
+                allowedValue.Equals(trimmedValue, StringComparison.OrdinalIgnoreCase));
         }
 
         private async Task<string> SaveUploadedAsset(IFormFile file)

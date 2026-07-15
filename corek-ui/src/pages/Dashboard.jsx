@@ -82,12 +82,36 @@ const emptyPasswordForm = {
 };
 
 const defaultSubscriptionSettings = {
-  plan: 'Professional',
+  plan: 'Starter',
   billingCycle: 'Monthly',
   billingEmail: '',
-  seats: '3',
-  autoRenew: true,
+  seats: '1',
+  autoRenew: false,
 };
+
+const subscriptionPlanOptions = [
+  {
+    plan: 'Starter',
+    price: 'Free',
+    seats: 1,
+    description: 'Default access for every new seller account.',
+    features: ['List products', 'Receive customer tickets', 'Request payouts'],
+  },
+  {
+    plan: 'Professional',
+    price: 'PHP 499 / month',
+    seats: 3,
+    description: 'For sellers who need more workspace capacity.',
+    features: ['More workspace seats', 'Auto-renew billing', 'Priority seller tools'],
+  },
+  {
+    plan: 'Enterprise',
+    price: 'PHP 1,499 / month',
+    seats: 10,
+    description: 'For larger seller teams managing many listings.',
+    features: ['Expanded team access', 'Advanced seller controls', 'Premium support lane'],
+  },
+];
 
 const moduleRegistry = {
   overview: { id: 'overview', label: 'Dashboard', icon: LayoutDashboard },
@@ -600,6 +624,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     ...defaultSubscriptionSettings,
     billingEmail: activeUser.email || activeUser.Email || '',
   }));
+  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
   const [activeSubscriptionAccount, setActiveSubscriptionAccount] = useState(null);
   const [adminSubscriptionSettings, setAdminSubscriptionSettings] = useState(defaultSubscriptionSettings);
   const [isLibraryFilterOpen, setIsLibraryFilterOpen] = useState(false);
@@ -2229,6 +2254,29 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     }
   };
 
+  const openSellerSubscriptionModal = async () => {
+    setIsSubscriptionModalOpen(true);
+
+    try {
+      const subscription = await api.getSubscription(userId);
+      setSubscriptionSettings(normalizeSubscriptionSettings(
+        subscription,
+        profile.email || activeUser.email || activeUser.Email || ''
+      ));
+    } catch (err) {
+      showError(err.message || 'Unable to load subscription settings.');
+    }
+  };
+
+  const handleSubscriptionPlanSelect = (planOption) => {
+    setSubscriptionSettings((currentSettings) => ({
+      ...currentSettings,
+      plan: planOption.plan,
+      seats: String(planOption.seats),
+      autoRenew: planOption.plan === 'Starter' ? false : true,
+    }));
+  };
+
   const handleSubscriptionSubmit = async (event) => {
     event.preventDefault();
 
@@ -2244,9 +2292,9 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     }
 
     const confirmed = await requestConfirmation({
-      title: 'Save Subscription?',
-      message: 'Confirm the ERP subscription settings for this seller account.',
-      confirmLabel: 'Save Subscription',
+      title: 'Subscribe to Plan?',
+      message: `Confirm the ${subscriptionSettings.plan} subscription for this seller account.`,
+      confirmLabel: 'Subscribe',
     });
     if (!confirmed) return;
 
@@ -2260,7 +2308,8 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       });
 
       setSubscriptionSettings(normalizeSubscriptionSettings(result.subscription || result, subscriptionSettings.billingEmail));
-      showNotice('Subscription saved.', result.message || 'ERP subscription settings were updated.');
+      setIsSubscriptionModalOpen(false);
+      showNotice('Subscription saved.', result.message || 'Seller subscription was updated.');
       await loadDashboard();
     } catch (err) {
       showError(err.message);
@@ -4098,6 +4147,124 @@ export default function Dashboard({ user, userSessionName, activeModule: control
     </div>
   );
 
+  const renderSellerSubscriptionModal = () => {
+    const selectedPlan = subscriptionPlanOptions.find((planOption) =>
+      planOption.plan === subscriptionSettings.plan
+    ) || subscriptionPlanOptions[0];
+
+    return (
+      <DashboardModal
+        title="Subscription Plans"
+        subtitle={`Current plan: ${subscriptionSettings.plan || 'Starter'}`}
+        onClose={() => setIsSubscriptionModalOpen(false)}
+        size="wide"
+      >
+        <form className="seller-subscription-modal subscription-settings-panel" onSubmit={handleSubscriptionSubmit} noValidate>
+          <div className="subscription-summary-grid">
+            <div>
+              <span>Selected Plan</span>
+              <strong>{selectedPlan.plan}</strong>
+            </div>
+            <div>
+              <span>Price</span>
+              <strong>{selectedPlan.price}</strong>
+            </div>
+            <div>
+              <span>Seats</span>
+              <strong>{subscriptionSettings.seats}</strong>
+            </div>
+          </div>
+
+          <div className="subscription-plan-grid" aria-label="Subscription plans">
+            {subscriptionPlanOptions.map((planOption) => {
+              const isSelected = planOption.plan === subscriptionSettings.plan;
+
+              return (
+                <button
+                  className={`subscription-plan-card ${isSelected ? 'selected' : ''}`}
+                  key={planOption.plan}
+                  type="button"
+                  onClick={() => handleSubscriptionPlanSelect(planOption)}
+                >
+                  <span className="subscription-plan-heading">
+                    <strong>{planOption.plan}</strong>
+                    {isSelected && <span>Selected</span>}
+                  </span>
+                  <em>{planOption.price}</em>
+                  <p>{planOption.description}</p>
+                  <small>{planOption.seats} workspace seat(s)</small>
+                  <span className="subscription-plan-features">
+                    {planOption.features.map((feature) => (
+                      <span key={feature}>
+                        <CheckCircle size={14} />
+                        {feature}
+                      </span>
+                    ))}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="form-grid subscription-form-grid">
+            <div className="field">
+              <label>Billing Cycle</label>
+              <select
+                value={subscriptionSettings.billingCycle}
+                onChange={(e) => setSubscriptionSettings({ ...subscriptionSettings, billingCycle: e.target.value })}
+              >
+                <option value="Monthly">Monthly</option>
+                <option value="Quarterly">Quarterly</option>
+                <option value="Annual">Annual</option>
+              </select>
+            </div>
+
+            <div className="field">
+              <label>Billing Email</label>
+              <input
+                required
+                type="email"
+                value={subscriptionSettings.billingEmail}
+                onChange={(e) => setSubscriptionSettings({ ...subscriptionSettings, billingEmail: e.target.value })}
+              />
+            </div>
+
+            <div className="field">
+              <label>Workspace Seats</label>
+              <input
+                inputMode="numeric"
+                value={subscriptionSettings.seats}
+                onChange={(e) => setSubscriptionSettings({
+                  ...subscriptionSettings,
+                  seats: normalizeWholeNumberInput(e.target.value, 2),
+                })}
+              />
+            </div>
+
+            <label className="field checkbox-row subscription-renewal-toggle">
+              <input
+                type="checkbox"
+                checked={subscriptionSettings.autoRenew}
+                onChange={(e) => setSubscriptionSettings({ ...subscriptionSettings, autoRenew: e.target.checked })}
+              />
+              <span>Auto-renew subscription</span>
+            </label>
+          </div>
+
+          <div className="toolbar modal-actions">
+            <button className="button" type="submit">
+              Subscribe
+              <CreditCard size={16} />
+            </button>
+            <button className="button secondary" type="button" onClick={() => setIsSubscriptionModalOpen(false)}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      </DashboardModal>
+    );
+  };
+
   const renderAdminSubscriptionModal = () => {
     if (!activeSubscriptionAccount) return null;
 
@@ -4405,6 +4572,24 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       </div>
     );
 
+    const sellerProfileTab = profileSettingsTab === 'security' ? 'security' : 'account';
+    const sellerSubscriptionPanel = (
+      <div className="panel subscription-entry-panel">
+        <div>
+          <span>Subscription</span>
+          <strong>{subscriptionSettings.plan || 'Starter'}</strong>
+          <p>
+            {subscriptionSettings.billingCycle} billing / {subscriptionSettings.seats || '1'} workspace seat(s)
+          </p>
+        </div>
+
+        <button className="button" type="button" onClick={openSellerSubscriptionModal}>
+          View Plans
+          <CreditCard size={16} />
+        </button>
+      </div>
+    );
+
     if (!isSeller) {
       return (
         <div className="module-stack account-segmented-shell">
@@ -4434,21 +4619,14 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       <div className="module-stack seller-account-settings account-segmented-shell">
         <div className="seller-dashboard-tabs account-settings-tabs" role="tablist" aria-label="Seller account settings">
           <button
-            className={profileSettingsTab === 'account' ? 'active' : ''}
+            className={sellerProfileTab === 'account' ? 'active' : ''}
             type="button"
             onClick={() => setProfileSettingsTab('account')}
           >
             Account Settings
           </button>
           <button
-            className={profileSettingsTab === 'subscription' ? 'active' : ''}
-            type="button"
-            onClick={() => setProfileSettingsTab('subscription')}
-          >
-            Subscription
-          </button>
-          <button
-            className={profileSettingsTab === 'security' ? 'active' : ''}
+            className={sellerProfileTab === 'security' ? 'active' : ''}
             type="button"
             onClick={() => setProfileSettingsTab('security')}
           >
@@ -4456,99 +4634,9 @@ export default function Dashboard({ user, userSessionName, activeModule: control
           </button>
         </div>
 
-        {profileSettingsTab === 'account' && profileForm}
-
-        {profileSettingsTab === 'subscription' && (
-        <form className="panel subscription-settings-panel" onSubmit={handleSubscriptionSubmit} noValidate>
-          <div className="panel-title-row">
-            <div>
-              <h2>Subscription</h2>
-              <p>ERP access, billing cycle, and team seat controls for this seller workspace.</p>
-            </div>
-            <CreditCard size={20} />
-          </div>
-
-          <div className="subscription-summary-grid">
-            <div>
-              <span>Current Plan</span>
-              <strong>{subscriptionSettings.plan}</strong>
-            </div>
-            <div>
-              <span>Billing</span>
-              <strong>{subscriptionSettings.billingCycle}</strong>
-            </div>
-            <div>
-              <span>Seats</span>
-              <strong>{subscriptionSettings.seats}</strong>
-            </div>
-          </div>
-
-          <div className="form-grid subscription-form-grid">
-            <div className="field">
-              <label>Plan</label>
-              <select
-                value={subscriptionSettings.plan}
-                onChange={(e) => setSubscriptionSettings({ ...subscriptionSettings, plan: e.target.value })}
-              >
-                <option value="Starter">Starter</option>
-                <option value="Professional">Professional</option>
-                <option value="Enterprise">Enterprise</option>
-              </select>
-            </div>
-
-            <div className="field">
-              <label>Billing Cycle</label>
-              <select
-                value={subscriptionSettings.billingCycle}
-                onChange={(e) => setSubscriptionSettings({ ...subscriptionSettings, billingCycle: e.target.value })}
-              >
-                <option value="Monthly">Monthly</option>
-                <option value="Quarterly">Quarterly</option>
-                <option value="Annual">Annual</option>
-              </select>
-            </div>
-
-            <div className="field">
-              <label>Billing Email</label>
-              <input
-                type="email"
-                value={subscriptionSettings.billingEmail}
-                onChange={(e) => setSubscriptionSettings({ ...subscriptionSettings, billingEmail: e.target.value })}
-              />
-            </div>
-
-            <div className="field">
-              <label>Workspace Seats</label>
-              <input
-                inputMode="numeric"
-                value={subscriptionSettings.seats}
-                onChange={(e) => setSubscriptionSettings({
-                  ...subscriptionSettings,
-                  seats: String(e.target.value).replace(/\D/g, '').slice(0, 2),
-                })}
-              />
-            </div>
-
-            <label className="field checkbox-row subscription-renewal-toggle">
-              <input
-                type="checkbox"
-                checked={subscriptionSettings.autoRenew}
-                onChange={(e) => setSubscriptionSettings({ ...subscriptionSettings, autoRenew: e.target.checked })}
-              />
-              <span>Auto-renew subscription</span>
-            </label>
-          </div>
-
-          <div className="toolbar" style={{ marginTop: 14 }}>
-            <button className="button" type="submit">
-              Save Subscription
-              <Save size={16} />
-            </button>
-          </div>
-        </form>
-        )}
-
-        {profileSettingsTab === 'security' && securityPanel}
+        {sellerSubscriptionPanel}
+        {sellerProfileTab === 'account' && profileForm}
+        {sellerProfileTab === 'security' && securityPanel}
       </div>
     );
   };
@@ -5292,6 +5380,7 @@ export default function Dashboard({ user, userSessionName, activeModule: control
       {isValidIdModalOpen && renderValidIdModal()}
       {isChangePasswordModalOpen && renderChangePasswordModal()}
       {activeValidIdDetails && renderValidIdDetailsModal()}
+      {isSubscriptionModalOpen && renderSellerSubscriptionModal()}
       {activeSubscriptionAccount && renderAdminSubscriptionModal()}
       {isLibraryFilterOpen && renderLibraryFilterModal()}
       {(isSeller || isCustomer) && renderChatboxMessenger()}
