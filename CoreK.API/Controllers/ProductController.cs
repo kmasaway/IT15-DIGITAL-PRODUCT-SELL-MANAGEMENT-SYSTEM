@@ -69,9 +69,13 @@ namespace CoreK.API.Controllers
                         .Select(v => v.VersionNumber)
                         .FirstOrDefault() ?? "1.0.0",
                     CoverFilePath = p.Versions
-                        .OrderBy(v => v.ReleaseDate)
+                        .OrderByDescending(v => v.ReleaseDate)
                         .Select(v => v.SecureFilePath)
                         .FirstOrDefault(),
+                    VersionFilePaths = p.Versions
+                        .OrderByDescending(v => v.ReleaseDate)
+                        .Select(v => v.SecureFilePath)
+                        .ToList(),
                     Versions = p.Versions
                         .OrderByDescending(v => v.ReleaseDate)
                         .Select(v => new
@@ -110,8 +114,8 @@ namespace CoreK.API.Controllers
                     p.CategoryName,
                     p.VersionCount,
                     p.LatestVersion,
-                    ThumbnailUrl = GetPublicAssetUrl(p.CoverFilePath),
-                    CoverPhotoUrl = GetPublicAssetUrl(p.CoverFilePath),
+                    ThumbnailUrl = GetProductThumbnailUrl(p.VersionFilePaths, p.CoverFilePath),
+                    CoverPhotoUrl = GetProductThumbnailUrl(p.VersionFilePaths, p.CoverFilePath),
                     p.Versions
                 };
             }));
@@ -161,11 +165,19 @@ namespace CoreK.API.Controllers
                 Category = product.Category?.CategoryName ?? "Digital Product",
                 CategoryName = product.Category?.CategoryName ?? "Digital Product",
                 ThumbnailUrl = GetPublicAssetUrl(product.Versions
-                    .OrderBy(v => v.ReleaseDate)
+                    .OrderByDescending(v => v.ReleaseDate)
+                    .Select(v => v.SecureFilePath)
+                    .FirstOrDefault(IsImageAssetPath)
+                    ?? product.Versions
+                    .OrderByDescending(v => v.ReleaseDate)
                     .Select(v => v.SecureFilePath)
                     .FirstOrDefault()),
                 CoverPhotoUrl = GetPublicAssetUrl(product.Versions
-                    .OrderBy(v => v.ReleaseDate)
+                    .OrderByDescending(v => v.ReleaseDate)
+                    .Select(v => v.SecureFilePath)
+                    .FirstOrDefault(IsImageAssetPath)
+                    ?? product.Versions
+                    .OrderByDescending(v => v.ReleaseDate)
                     .Select(v => v.SecureFilePath)
                     .FirstOrDefault()),
                 Versions = product.Versions
@@ -215,9 +227,13 @@ namespace CoreK.API.Controllers
                         .Select(v => v.VersionNumber)
                         .FirstOrDefault() ?? "1.0.0",
                     CoverFilePath = p.Versions
-                        .OrderBy(v => v.ReleaseDate)
+                        .OrderByDescending(v => v.ReleaseDate)
                         .Select(v => v.SecureFilePath)
-                        .FirstOrDefault()
+                        .FirstOrDefault(),
+                    VersionFilePaths = p.Versions
+                        .OrderByDescending(v => v.ReleaseDate)
+                        .Select(v => v.SecureFilePath)
+                        .ToList()
                 })
                 .ToListAsync();
 
@@ -246,8 +262,8 @@ namespace CoreK.API.Controllers
                     p.Category,
                     p.VersionCount,
                     p.LatestVersion,
-                    ThumbnailUrl = GetPublicAssetUrl(p.CoverFilePath),
-                    CoverPhotoUrl = GetPublicAssetUrl(p.CoverFilePath)
+                    ThumbnailUrl = GetProductThumbnailUrl(p.VersionFilePaths, p.CoverFilePath),
+                    CoverPhotoUrl = GetProductThumbnailUrl(p.VersionFilePaths, p.CoverFilePath)
                 };
             }));
         }
@@ -594,6 +610,31 @@ namespace CoreK.API.Controllers
             return string.IsNullOrWhiteSpace(fileName)
                 ? null
                 : $"/uploads/{Uri.EscapeDataString(fileName)}";
+        }
+
+        private static string? GetProductThumbnailUrl(IEnumerable<string?> filePaths, string? fallbackFilePath)
+        {
+            var imageFilePath = filePaths.FirstOrDefault(IsImageAssetPath);
+            return GetPublicAssetUrl(imageFilePath ?? fallbackFilePath);
+        }
+
+        private static bool IsImageAssetPath(string? filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath))
+            {
+                return false;
+            }
+
+            var extension = Path.GetExtension(filePath.Split('?', '#')[0]);
+            return extension.Equals(".apng", StringComparison.OrdinalIgnoreCase)
+                || extension.Equals(".avif", StringComparison.OrdinalIgnoreCase)
+                || extension.Equals(".bmp", StringComparison.OrdinalIgnoreCase)
+                || extension.Equals(".gif", StringComparison.OrdinalIgnoreCase)
+                || extension.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
+                || extension.Equals(".jpeg", StringComparison.OrdinalIgnoreCase)
+                || extension.Equals(".png", StringComparison.OrdinalIgnoreCase)
+                || extension.Equals(".svg", StringComparison.OrdinalIgnoreCase)
+                || extension.Equals(".webp", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

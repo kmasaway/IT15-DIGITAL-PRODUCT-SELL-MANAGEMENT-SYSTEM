@@ -73,7 +73,7 @@ export default function App() {
       {/* Dynamic Header / Navigation Bar */}
       <header style={styles.navbar}>
         <div style={styles.logoGroup}>
-          <span style={styles.logoText}>CoreK</span>
+          <span style={styles.logoText}>ᴄᴏʀᴇᴋ</span>
         </div>
         {isCustomerSession ? (
           <nav className="customer-header-nav" style={styles.customerHeaderNav} aria-label="Customer navigation">
@@ -188,7 +188,7 @@ const styles = {
     background: 'transparent',
     color: '#0f291e',
     fontFamily: '"Trebuchet MS", "Segoe UI", system-ui, sans-serif',
-    fontSize: '1.72rem',
+    fontSize: '2.05rem',
     fontWeight: '950',
     letterSpacing: '0',
     boxShadow: 'none'

@@ -5,7 +5,7 @@ export default function Footer() {
         {/* Brand/Mission Block */}
         <div style={styles.brandColumn}>
           <div style={styles.brandHeader}>
-            <span style={styles.logoText}>CoreK Systems</span>
+            <span style={styles.logoText}>ᴄᴏʀᴇᴋ Systems</span>
           </div>
           <p style={styles.brandDesc}>
             Automating standard digital checkout environments and edge package distribution delivery models safely.
@@ -77,14 +77,15 @@ const styles = {
     marginBottom: '1rem'
   },
   logoText: {
-    border: '1px solid #bfe0d3',
-    borderRadius: '12px',
-    background: 'linear-gradient(135deg, #ffffff 0%, #eefbf7 100%)',
-    boxShadow: '0 8px 20px rgba(15,41,30,0.08)',
-    fontSize: '1.1rem',
-    fontWeight: '900',
+    border: 'none',
+    borderRadius: 0,
+    background: 'transparent',
+    boxShadow: 'none',
+    fontFamily: '"Trebuchet MS", "Segoe UI", system-ui, sans-serif',
+    fontSize: '1.65rem',
+    fontWeight: '950',
     color: '#0f291e',
-    padding: '0.35rem 0.75rem'
+    padding: 0
   },
   brandDesc: {
     fontSize: '0.9rem',

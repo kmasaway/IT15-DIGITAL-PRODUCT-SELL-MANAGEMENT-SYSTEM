@@ -316,7 +316,7 @@ function getProductImageSource(product) {
       || product.imageUrl
       || product.ImageUrl;
 
-  if (directSource) {
+  if (directSource && isImageSource(directSource)) {
     return getAssetUrl(directSource);
   }
 

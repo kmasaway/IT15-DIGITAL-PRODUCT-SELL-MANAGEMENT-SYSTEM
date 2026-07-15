@@ -17,7 +17,7 @@ export default function Header({ currentPage, setCurrentPage, isLoggedIn, onLogo
           style={styles.brand} 
           onClick={() => setCurrentPage(isLoggedIn ? 'home' : 'landing')}
         >
-          <span style={styles.logo}>CoreK</span>
+          <span style={styles.logo}>ᴄᴏʀᴇᴋ</span>
         </div>
 
         {/* Global Catalog Search Form */}
@@ -117,7 +117,7 @@ const styles = {
     background: 'transparent',
     color: '#0b241a',
     fontFamily: '"Trebuchet MS", "Segoe UI", system-ui, sans-serif',
-    fontSize: '1.8rem',
+    fontSize: '2.1rem',
     fontWeight: '950',
     letterSpacing: '0',
     padding: 0,
